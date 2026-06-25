@@ -1,4 +1,4 @@
-import { Scene, GridTextEntity } from '@vecto/core';
+import { Scene, Entity, LayoutEngine, LayoutNode } from '@vecto/core';
 
 // HMR 热更新终极杀手：全局拦截并销毁旧的死循环
 if ((window as any).__VECTO_HMR_CLEANUP) {
@@ -9,8 +9,110 @@ let isRunning = true;
   isRunning = false;
 };
 
-// 字符密度表：从最亮到最暗 (越亮的像素用越密集的字符表示)
-const DENSITY = '@%#*+=-:. ';
+// Bad Apple 歌词 (重复拼接以填满整个屏幕)
+const LYRICS = `Ever on and on, I continue circling
+With nothing but my hate and the carousel of agony
+Till slowly I forget and my heart starts vanishing
+And suddenly I see that I can't break free—I'm
+Slipping through the cracks of a dark eternity
+With nothing but my pain and the paralyzing agony
+To tell me who I am! Who I was!
+Uncertainty enveloping my mind
+Till I can't break free, and
+Maybe it's a dream; maybe nothing else is real
+But it wouldn't mean a thing if I told you how I feel
+So I'm tired of all the pain, all the misery inside
+And I wish that I could live feeling nothing but the night
+You can tell me what to say; you can tell me where to go
+But I doubt that I would care, and my heart would never know
+If I make another move there'll be no more turning back
+Because everything will change, and it all will fade to black
+Will tomorrow ever come? Will I make it through the night?
+Will there ever be a place for the broken in the light?
+Am I hurting? Am I sad? Should I stay, or should I go?
+I've forgotten how to tell. Did I ever even know?
+Can I take another step? I've done everything I can
+All the people that I see I will never understand
+If I find a way to change, if I step into the light
+Then I'll never be the same, and it all will fade to white `.repeat(20);
+
+class LyricsMaskEntity extends Entity {
+  private layoutEngine: LayoutEngine;
+  private nodes: LayoutNode[] = [];
+  public text: string = '';
+  public fontSize = 16;
+  public atlas: any;
+
+  // 物理碰撞层
+  public video: HTMLVideoElement;
+  public offCanvas: HTMLCanvasElement;
+  public offCtx: CanvasRenderingContext2D;
+  public COLS: number = 160;
+  public ROWS: number = 120;
+
+  constructor(text: string, atlas: any, video: HTMLVideoElement) {
+    super();
+    this.text = text;
+    this.atlas = atlas;
+    this.video = video;
+    this.layoutEngine = new LayoutEngine(window.innerWidth, window.innerHeight);
+
+    // 建立一个低分辨率的隐藏离屏碰撞贴图，用于 60FPS 极速判断
+    this.offCanvas = document.createElement('canvas');
+    this.offCanvas.width = this.COLS;
+    this.offCanvas.height = this.ROWS;
+    this.offCtx = this.offCanvas.getContext('2d', { willReadFrequently: true })!;
+    this.offCtx.imageSmoothingEnabled = false;
+  }
+
+  isPointInside() {
+    return false;
+  }
+
+  update(dt: number, time: number) {
+    super.update(dt, time);
+    if (this.video.readyState < this.video.HAVE_CURRENT_DATA) return;
+
+    // 1. 将视频当前帧硬刷到碰撞贴图
+    this.offCtx.drawImage(this.video, 0, 0, this.COLS, this.ROWS);
+    const imgData = this.offCtx.getImageData(0, 0, this.COLS, this.ROWS).data;
+
+    const screenW = window.innerWidth;
+    const screenH = window.innerHeight;
+
+    // 2. 定义排版引擎的 Exclusion Mask (物理排斥蒙版)
+    const exclusionMask = (x: number, y: number, w: number, h: number) => {
+      // 映射屏幕排版坐标到物理碰撞贴图坐标
+      // 由于字体是从基线向下绘制的，我们取字符中心点做碰撞检测
+      const cx = Math.floor(((x + w / 2) / screenW) * this.COLS);
+      const cy = Math.floor(((y + h / 2) / screenH) * this.ROWS);
+
+      if (cx < 0 || cx >= this.COLS || cy < 0 || cy >= this.ROWS) return false;
+
+      const idx = (cy * this.COLS + cx) * 4;
+      const brightness = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
+
+      // Bad Apple 中人物是黑色的 (明度低)
+      // 如果明度低于阈值，说明撞到了物理轮廓，返回 true (排斥该字符)
+      return brightness < 127;
+    };
+
+    // 3. 启动 V8 Intl.Segmenter 全局折行引擎！(60FPS 实时计算万字折行)
+    const res = this.layoutEngine.layoutText(this.text, this.atlas, this.fontSize, exclusionMask);
+    this.nodes = res.nodes;
+  }
+
+  render(renderer: any) {
+    // 极速渲染管线
+    for (const node of this.nodes) {
+      renderer.save();
+      // 这里使用原生 fillText 演示极限性能
+      renderer.translate(node.x, node.y + this.fontSize * 0.8);
+      renderer.fillText(node.char, 0, 0, `bold ${this.fontSize}px sans-serif`, '#ffffff');
+      renderer.restore();
+    }
+  }
+}
 
 async function bootstrap() {
   document.body.innerHTML = '';
@@ -32,79 +134,28 @@ async function bootstrap() {
 
   const scene = new Scene(canvas);
 
+  // 加载字体地图
   const res = await fetch('/ast/font_glyph_map.json');
   const atlas = await res.json();
 
-  // Bad Apple 专用矩阵 (120x80)
-  const COLS = 120;
-  const ROWS = 80;
-
-  // 动态响应式探测：确保网格完美适配不同屏幕，不需要手动缩放
-  let fontSize = Math.floor(window.innerWidth / COLS);
-  if (fontSize * ROWS * 1.1 > window.innerHeight) {
-    fontSize = Math.floor(window.innerHeight / (ROWS * 1.1));
-  }
-  if (fontSize < 4) fontSize = 4; // 最小保底
-
-  const grid = new GridTextEntity(atlas, fontSize);
-  grid.fillStyle = '#ffffff';
-
-  // 精确居中
-  const gridWidth = COLS * grid.charWidth;
-  const gridHeight = ROWS * grid.charHeight;
-  grid.setPosition((window.innerWidth - gridWidth) / 2, (window.innerHeight - gridHeight) / 2);
-  scene.add(grid);
-
-  // 挂载隐藏的原生视频标签
+  // 挂载原视频作为画中画对照，以及驱动碰撞引擎
   const video = document.createElement('video');
   video.src = '/bad-apple.mp4';
   video.crossOrigin = 'anonymous';
   video.loop = true;
   video.muted = true;
+  video.style.position = 'absolute';
+  video.style.top = '20px';
+  video.style.left = '20px';
+  video.style.width = '240px';
+  video.style.border = '2px solid rgba(255,255,255,0.3)';
+  video.style.zIndex = '100';
+  document.body.appendChild(video);
   video.play();
 
-  // 离屏 Canvas (Offscreen) 像素采样器
-  const offCanvas = document.createElement('canvas');
-  offCanvas.width = COLS;
-  offCanvas.height = ROWS;
-  const ctx = offCanvas.getContext('2d', { willReadFrequently: true })!;
-
-  // 修复重叠幻影：关闭硬件双线性插值，保持极致锐利的像素边缘
-  ctx.imageSmoothingEnabled = false;
-
-  // 暴力劫持 ECS 的逐帧 Update 钩子
-  const originalUpdate = grid.update.bind(grid);
-  grid.update = (dt: number, time: number) => {
-    originalUpdate(dt, time);
-
-    // 如果视频准备好了
-    if (video.readyState >= video.HAVE_CURRENT_DATA) {
-      // 1. 把视频当前帧硬绘制到极其微小的离屏 Canvas 上
-      ctx.drawImage(video, 0, 0, COLS, ROWS);
-      // 2. 瞬间提取所有的像素数据
-      const imageData = ctx.getImageData(0, 0, COLS, ROWS).data;
-
-      const asciiGrid = [];
-      for (let r = 0; r < ROWS; r++) {
-        let rowStr = '';
-        for (let c = 0; c < COLS; c++) {
-          const idx = (r * COLS + c) * 4;
-          // RGB 取平均值计算明度
-          const brightness = (imageData[idx] + imageData[idx + 1] + imageData[idx + 2]) / 3;
-
-          // 修复重叠幻影：二值化处理，强制消除 mp4 的灰阶压缩噪点
-          const contrast = brightness > 127 ? 255 : 0;
-
-          // 明度 (0-255) 映射到 DENSITY 字符串表
-          const charIdx = Math.floor((contrast / 255) * (DENSITY.length - 1));
-          rowStr += DENSITY[charIdx];
-        }
-        asciiGrid.push(rowStr);
-      }
-      // 3. 将 9600 个字符塞回底层 ECS 实体！
-      grid.updateGrid(asciiGrid);
-    }
-  };
+  // 初始化动态歌词遮罩实体！
+  const lyricsEntity = new LyricsMaskEntity(LYRICS, atlas, video);
+  scene.add(lyricsEntity);
 
   scene.start();
   setupFPSMonitor();
@@ -122,7 +173,8 @@ async function bootstrap() {
   instruction.style.padding = '20px';
   instruction.style.border = '2px dashed #fff';
   instruction.style.backgroundColor = 'rgba(0,0,0,0.8)';
-  instruction.innerText = '🎬 Click to Start Bad Apple';
+  instruction.innerText = '🎬 Click to Start Realtime Text Flow';
+  instruction.style.zIndex = '1000';
   canvasParent.appendChild(instruction);
 
   instruction.addEventListener('click', () => {
@@ -149,15 +201,13 @@ function setupFPSMonitor() {
   let lastTime = performance.now();
 
   function update() {
-    if (!isRunning) return; // HMR GC: 立即退出旧实例循环
+    if (!isRunning) return; // HMR GC
     frames++;
     const now = performance.now();
     if (now - lastTime >= 1000) {
-      // 获取 V8 引擎真实堆内存大小 (仅 Chrome/Edge 支持)
       const mem = (performance as any).memory;
       const memStr = mem ? ` | Mem: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB` : '';
-
-      fpsEl.textContent = `FPS: ${frames}${memStr} | Bad Apple 9,600 Entities`;
+      fpsEl.textContent = `FPS: ${frames}${memStr} | Realtime Lyrics Engine`;
       frames = 0;
       lastTime = now;
     }
