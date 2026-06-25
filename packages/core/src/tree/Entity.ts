@@ -43,6 +43,15 @@ export abstract class Entity {
     return this;
   }
 
+  public remove(child: Entity): this {
+    const index = this.children.indexOf(child);
+    if (index !== -1) {
+      this.children.splice(index, 1);
+      child.parent = null;
+    }
+    return this;
+  }
+
   public setPosition(x: number, y: number): this {
     this.x = x;
     this.y = y;
