@@ -1,4 +1,6 @@
 import { Scene, Entity, LayoutEngine, GlyphAtlas } from '@vecto/core';
+import { setupNavBar } from './shared/navBar';
+import { setupFPSMonitor } from './shared/fpsMonitor';
 
 // HMR cleanup guard
 if ((window as any).__VECTO_HMR_CLEANUP) {
@@ -215,26 +217,8 @@ async function bootstrap() {
   });
 
   scene.start();
-  setupNavBar();
-}
-
-function setupNavBar() {
-  const nav = document.createElement('div');
-  nav.style.cssText = `
-    position:fixed;top:0;left:0;width:100%;z-index:9999;
-    background:rgba(0,0,0,0.85);color:white;padding:10px 16px;
-    font-family:monospace;display:flex;gap:20px;align-items:center;
-    border-bottom:1px solid #334155;backdrop-filter:blur(8px);
-  `;
-  nav.innerHTML = `
-    <b style="color:#38bdf8;">VectoUI</b>
-    <a href="#tight-bubbles" style="color:#fca5a5;text-decoration:none;" onclick="setTimeout(()=>location.reload(),10)">💬 Tight Bubbles</a>
-    <a href="#physics" style="color:#94a3b8;text-decoration:none;" onclick="setTimeout(()=>location.reload(),10)">📚 Physics Text</a>
-    <a href="#bad-apple-lyrics" style="color:#94a3b8;text-decoration:none;" onclick="setTimeout(()=>location.reload(),10)">🎵 Lyrics Reflow</a>
-    <a href="#bad-apple-classic" style="color:#94a3b8;text-decoration:none;" onclick="setTimeout(()=>location.reload(),10)">🍎 Classic Matrix</a>
-    <a href="#bad-apple-variable" style="color:#94a3b8;text-decoration:none;" onclick="setTimeout(()=>location.reload(),10)">✨ Variable Font ASCII</a>
-  `;
-  document.body.appendChild(nav);
+  setupFPSMonitor('Tight Bubbles', () => isRunning);
+  setupNavBar('#tight-bubbles');
 }
 
 bootstrap();
