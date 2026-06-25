@@ -1,22 +1,115 @@
+/**
+ * Renderer abstraction consumed by every {@link Entity}.
+ *
+ * Implementations wrap a concrete drawing backend (Canvas 2D, WebGL, …) and
+ * expose a path-based drawing API.  Entities must only depend on `IRenderer`
+ * so they remain backend-agnostic.
+ *
+ * @example
+ * // Inside an Entity.render() implementation:
+ * render(r: IRenderer) {
+ *   r.beginPath();
+ *   r.fill('#38bdf8');
+ * }
+ */
 export interface IRenderer {
+  /** Clear the entire drawing surface to transparent / background color. */
   clear(): void;
+  /** Push the current transform + state onto the renderer's stack. */
   save(): void;
+  /** Pop the last saved transform + state from the renderer's stack. */
   restore(): void;
+  /**
+   * Apply a translation to the current transform matrix.
+   *
+   * @param x - Horizontal offset in pixels.
+   * @param y - Vertical offset in pixels.
+   */
   translate(x: number, y: number): void;
+  /**
+   * Apply a scale to the current transform matrix.
+   *
+   * @param x - Horizontal scale factor.
+   * @param y - Vertical scale factor.
+   */
   scale(x: number, y: number): void;
+  /**
+   * Apply a clockwise rotation to the current transform matrix.
+   *
+   * @param angle - Rotation angle in radians.
+   */
   rotate(angle: number): void;
+  /**
+   * Set the global opacity applied to all subsequent draw calls.
+   *
+   * @param alpha - Opacity in the range `[0, 1]`.
+   */
   setGlobalAlpha(alpha: number): void;
 
+  /** Begin a new sub-path, discarding the current path. */
   beginPath(): void;
+  /**
+   * Move the pen to the given point without drawing a line.
+   *
+   * @param x - Target X coordinate.
+   * @param y - Target Y coordinate.
+   */
   moveTo(x: number, y: number): void;
+  /**
+   * Add a straight line segment from the current pen position to the given point.
+   *
+   * @param x - Target X coordinate.
+   * @param y - Target Y coordinate.
+   */
   lineTo(x: number, y: number): void;
+  /**
+   * Add a cubic Bézier curve to the current path.
+   *
+   * @param cp1x - X of the first control point.
+   * @param cp1y - Y of the first control point.
+   * @param cp2x - X of the second control point.
+   * @param cp2y - Y of the second control point.
+   * @param x - X of the end point.
+   * @param y - Y of the end point.
+   */
   bezierCurveTo(cp1x: number, cp1y: number, cp2x: number, cp2y: number, x: number, y: number): void;
+  /** Close the current sub-path by drawing a line back to its starting point. */
   closePath(): void;
 
+  /**
+   * Fill the current path with the given color or gradient.
+   *
+   * @param colorOrGradient - CSS color string or a gradient object.
+   */
   fill(colorOrGradient: string | any): void;
+  /**
+   * Stroke the current path with the given color or gradient.
+   *
+   * @param colorOrGradient - CSS color string or a gradient object.
+   * @param lineWidth - Stroke width in pixels (default: `1`).
+   */
   stroke(colorOrGradient: string | any, lineWidth?: number): void;
+  /**
+   * Render a text string at the given position.
+   *
+   * @param text - The string to draw.
+   * @param x - Left edge of the text baseline.
+   * @param y - Baseline Y coordinate.
+   * @param font - CSS font shorthand, e.g. `'16px monospace'`.
+   * @param color - CSS color string or gradient.
+   */
   fillText(text: string, x: number, y: number, font: string, color: string | any): void;
 
+  /**
+   * Create a linear gradient between two points with the given color stops.
+   *
+   * @param x0 - X of the gradient start point.
+   * @param y0 - Y of the gradient start point.
+   * @param x1 - X of the gradient end point.
+   * @param y1 - Y of the gradient end point.
+   * @param colorStops - Array of `{ stop, color }` pairs where `stop` is in `[0, 1]`.
+   * @returns An opaque gradient object suitable for {@link fill} or {@link stroke}.
+   */
   createLinearGradient(
     x0: number,
     y0: number,

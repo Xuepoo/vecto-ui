@@ -2,6 +2,18 @@ import { Entity } from './Entity';
 import { CanvasRenderer } from '../renderer/CanvasRenderer';
 import { IRenderer } from '../renderer/IRenderer';
 
+/**
+ * Top-level orchestrator that owns the entity tree, drive the render loop,
+ * and maintains the accessibility/automation shadow layer.
+ *
+ * Create one `Scene` per `<canvas>` element.  Add {@link Entity} objects via
+ * {@link add}, then call {@link start} to begin the 60-FPS render loop.
+ *
+ * @example
+ * const scene = new Scene(document.querySelector('canvas')!);
+ * scene.add(new CircleEntity().setPosition(100, 100));
+ * scene.start();
+ */
 export class Scene {
   private root: Entity;
   private renderer: CanvasRenderer;
@@ -45,10 +57,22 @@ export class Scene {
     this.setupEvents();
   }
 
+  /**
+   * Expose the underlying {@link IRenderer} for advanced direct-draw operations.
+   *
+   * @returns The active renderer instance.
+   */
   public getRenderer(): IRenderer {
     return this.renderer;
   }
 
+  /**
+   * Add a top-level entity to the scene graph.
+   *
+   * @param entity - The entity to attach to the scene root.
+   * @returns `this` for method chaining.
+   * @example scene.add(new CircleEntity());
+   */
   public add(entity: Entity): this {
     this.root.add(entity);
     return this;
@@ -60,6 +84,11 @@ export class Scene {
     });
   }
 
+  /**
+   * Begin the `requestAnimationFrame` render loop.
+   *
+   * Idempotent — calling `start()` on an already-running scene is a no-op.
+   */
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
@@ -67,6 +96,11 @@ export class Scene {
     requestAnimationFrame((t) => this.loop(t));
   }
 
+  /**
+   * Halt the render loop after the current frame completes.
+   *
+   * Call {@link start} again to resume rendering.
+   */
   public stop(): void {
     this.isRunning = false;
   }
