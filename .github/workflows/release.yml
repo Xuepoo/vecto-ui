@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install dependencies
+        run: bun install
+      - name: Build packages
+        run: cd packages/core && bun run build
+      - name: Pack package tarball
+        run: |
+          cd packages/core
+          npm pack
+          TARBALL_NAME=$(find . -maxdepth 1 -name "*.tgz" -exec basename {} \;)
+          echo "PACKAGE_TARBALL=${TARBALL_NAME}" >> "$GITHUB_ENV"
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packages/core/${{ env.PACKAGE_TARBALL }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
