@@ -1,5 +1,6 @@
 import { Scene, GridTextEntity } from '@vecto/core';
 import { setupNavBar } from './shared/navBar';
+import { setupFPSMonitor } from './shared/fpsMonitor';
 
 // HMR 热更新终极杀手：全局拦截并销毁旧的死循环
 if ((window as any).__VECTO_HMR_CLEANUP) {
@@ -115,7 +116,7 @@ async function bootstrap() {
   };
 
   scene.start();
-  setupFPSMonitor();
+  setupFPSMonitor('Bad Apple — 9,600 Entities', () => isRunning);
   setupNavBar('#bad-apple-classic');
 
   // 提供音频交互
@@ -140,39 +141,6 @@ async function bootstrap() {
     video.play();
     instruction.style.display = 'none';
   });
-}
-
-function setupFPSMonitor() {
-  const fpsEl = document.createElement('div');
-  fpsEl.style.position = 'absolute';
-  fpsEl.style.bottom = '10px';
-  fpsEl.style.right = '10px';
-  fpsEl.style.color = '#38bdf8';
-  fpsEl.style.fontFamily = 'monospace';
-  fpsEl.style.fontSize = '20px';
-  fpsEl.style.pointerEvents = 'none';
-  fpsEl.style.zIndex = '99';
-  document.body.appendChild(fpsEl);
-
-  let frames = 0;
-  let lastTime = performance.now();
-
-  function update() {
-    if (!isRunning) return; // HMR GC: 立即退出旧实例循环
-    frames++;
-    const now = performance.now();
-    if (now - lastTime >= 1000) {
-      // 获取 V8 引擎真实堆内存大小 (仅 Chrome/Edge 支持)
-      const mem = (performance as any).memory;
-      const memStr = mem ? ` | Mem: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB` : '';
-
-      fpsEl.textContent = `FPS: ${frames}${memStr} | Bad Apple 9,600 Entities`;
-      frames = 0;
-      lastTime = now;
-    }
-    requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
 }
 
 bootstrap();

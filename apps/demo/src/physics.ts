@@ -1,5 +1,6 @@
 import { Scene, Entity, LayoutEngine } from '@vecto/core';
 import { setupNavBar } from './shared/navBar';
+import { setupFPSMonitor } from './shared/fpsMonitor';
 
 // HMR 热更新终极杀手
 if ((window as any).__VECTO_HMR_CLEANUP) {
@@ -89,6 +90,10 @@ class PhysicsTextbookEntity extends Entity {
   private mouseX = 0;
   private mouseY = 0;
 
+  // Web Worker integration
+  private _worker: Worker | null = null;
+  private _sab: SharedArrayBuffer | null = null;
+
   constructor(text: string, atlas: any) {
     super();
     this.layoutEngine = new LayoutEngine(window.innerWidth - 100, window.innerHeight);
@@ -98,11 +103,37 @@ class PhysicsTextbookEntity extends Entity {
     const res = this.layoutEngine.layoutText(text, {}, this.fontSize);
 
     // 初始化物理字符
+    // Fix: offset chars below the 44px NavBar
     for (const node of res.nodes) {
-      this.chars.push(new PhysicsChar(node.char, node.x + 50, node.y + 100, node.height));
+      this.chars.push(new PhysicsChar(node.char, node.x + 50, node.y + 54, node.height));
     }
 
     this.interactive = true;
+
+    // Initialise Web Worker for off-thread physics (requires COOP/COEP headers or Vite's
+    // ?sharedworker param; falls back to main-thread if SAB is unavailable)
+    if (typeof SharedArrayBuffer !== 'undefined') {
+      const STRIDE = 6;
+      this._sab = new SharedArrayBuffer(
+        this.chars.length * STRIDE * Float32Array.BYTES_PER_ELEMENT,
+      );
+      this._worker = new Worker(new URL('./workers/physics.worker.ts', import.meta.url), {
+        type: 'module',
+      });
+      this._worker.onmessage = (e) => {
+        if (e.data.type !== 'done') return;
+        // Read updated positions back from SAB
+        const arr = new Float32Array(e.data.buffer);
+        const STRIDE = 6;
+        for (let i = 0; i < this.chars.length; i++) {
+          const xi = i * STRIDE;
+          this.chars[i].x = arr[xi];
+          this.chars[i].y = arr[xi + 1];
+          this.chars[i].vx = arr[xi + 2];
+          this.chars[i].vy = arr[xi + 3];
+        }
+      };
+    }
 
     // Use native window events since Shadow DOM might not map pointerdown perfectly
     window.addEventListener('mousedown', (e: any) => {
@@ -126,14 +157,13 @@ class PhysicsTextbookEntity extends Entity {
   update(dt: number, time: number) {
     super.update(dt, time);
 
-    // 交互力场 (Mouse Drag)
+    // Mouse drag force field (applied before worker tick)
     if (this.isDragging) {
       for (const c of this.chars) {
         const dx = this.mouseX - c.x;
         const dy = this.mouseY - c.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist < 150) {
-          // 磁性吸引半径
           const force = (150 - dist) * 0.15;
           c.vx += (dx / dist) * force;
           c.vy += (dy / dist) * force;
@@ -141,18 +171,41 @@ class PhysicsTextbookEntity extends Entity {
       }
     }
 
-    // 物理积分更新
-    for (let i = 0; i < this.chars.length; i++) {
-      const left = i > 0 ? this.chars[i - 1] : undefined;
-      const right = i < this.chars.length - 1 ? this.chars[i + 1] : undefined;
-
-      // 跨行的邻居不应该互相拉扯 (简单的 Y 坐标判断)
-      const validLeft =
-        left && Math.abs(left.targetY - this.chars[i].targetY) < 10 ? left : undefined;
-      const validRight =
-        right && Math.abs(right.targetY - this.chars[i].targetY) < 10 ? right : undefined;
-
-      this.chars[i].update(validLeft, validRight);
+    // Physics integration — run in Web Worker if available, else fall back to main thread
+    if (this._worker && this._sab) {
+      // Sync char state into SharedArrayBuffer
+      const arr = new Float32Array(this._sab);
+      const STRIDE = 6;
+      for (let i = 0; i < this.chars.length; i++) {
+        const xi = i * STRIDE;
+        const c = this.chars[i];
+        arr[xi] = c.x;
+        arr[xi + 1] = c.y;
+        arr[xi + 2] = c.vx;
+        arr[xi + 3] = c.vy;
+        arr[xi + 4] = c.targetX;
+        arr[xi + 5] = c.targetY;
+      }
+      this._worker.postMessage({
+        type: 'update',
+        buffer: this._sab,
+        count: this.chars.length,
+        isDragging: this.isDragging,
+        mouseX: this.mouseX,
+        mouseY: this.mouseY,
+      });
+      // Worker result is applied asynchronously in the message handler
+    } else {
+      // Main-thread fallback
+      for (let i = 0; i < this.chars.length; i++) {
+        const left = i > 0 ? this.chars[i - 1] : undefined;
+        const right = i < this.chars.length - 1 ? this.chars[i + 1] : undefined;
+        const validLeft =
+          left && Math.abs(left.targetY - this.chars[i].targetY) < 10 ? left : undefined;
+        const validRight =
+          right && Math.abs(right.targetY - this.chars[i].targetY) < 10 ? right : undefined;
+        this.chars[i].update(validLeft, validRight);
+      }
     }
   }
 
@@ -216,39 +269,8 @@ async function bootstrap() {
   scene.add(physicsEntity);
 
   scene.start();
-  setupFPSMonitor();
+  setupFPSMonitor("Hooke's Law Physics", () => isRunning);
   setupNavBar('#physics');
-}
-
-function setupFPSMonitor() {
-  const fpsEl = document.createElement('div');
-  fpsEl.style.position = 'absolute';
-  fpsEl.style.bottom = '10px';
-  fpsEl.style.right = '10px';
-  fpsEl.style.color = '#dc322f';
-  fpsEl.style.fontFamily = 'monospace';
-  fpsEl.style.fontSize = '20px';
-  fpsEl.style.pointerEvents = 'none';
-  fpsEl.style.zIndex = '99';
-  document.body.appendChild(fpsEl);
-
-  let frames = 0;
-  let lastTime = performance.now();
-
-  function update() {
-    if (!isRunning) return;
-    frames++;
-    const now = performance.now();
-    if (now - lastTime >= 1000) {
-      const mem = (performance as any).memory;
-      const memStr = mem ? ` | Mem: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB` : '';
-      fpsEl.textContent = `FPS: ${frames}${memStr} | Hooke's Law Physics`;
-      frames = 0;
-      lastTime = now;
-    }
-    requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
 }
 
 bootstrap();

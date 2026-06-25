@@ -1,5 +1,6 @@
 import { Scene, Entity, LayoutEngine, LayoutNode } from '@vecto/core';
 import { setupNavBar } from './shared/navBar';
+import { setupFPSMonitor } from './shared/fpsMonitor';
 
 // HMR 热更新终极杀手：全局拦截并销毁旧的死循环
 if ((window as any).__VECTO_HMR_CLEANUP) {
@@ -66,7 +67,12 @@ class LyricsMaskEntity extends Entity {
     this.offCtx.imageSmoothingEnabled = false;
 
     this.y = 50; // Offset below the navigation bar
+
+    // Frame-change fingerprint: sample 4 pixels to detect if video has advanced
+    this._lastFrameHash = -1;
   }
+
+  private _lastFrameHash: number;
 
   isPointInside() {
     return false;
@@ -80,13 +86,24 @@ class LyricsMaskEntity extends Entity {
     this.offCtx.drawImage(this.video, 0, 0, this.COLS, this.ROWS);
     const imgData = this.offCtx.getImageData(0, 0, this.COLS, this.ROWS).data;
 
+    // ── Frame-change detection ────────────────────────────────────────────
+    // Sample 8 pixels spread across the frame to cheaply detect if the video
+    // has advanced. layoutText on the full LYRICS string is O(N) and very
+    // expensive; we skip it when the frame hasn't changed.
+    const step = Math.floor((this.COLS * this.ROWS) / 8) * 4;
+    let hash = 0;
+    for (let s = 0; s < 8; s++) {
+      hash = (hash * 31 + imgData[s * step]) | 0;
+    }
+    if (hash === this._lastFrameHash) return; // same frame — skip relayout
+    this._lastFrameHash = hash;
+    // ─────────────────────────────────────────────────────────────────────
+
     const screenW = window.innerWidth;
     const screenH = window.innerHeight;
 
     // 2. 定义排版引擎的 Exclusion Mask (物理排斥蒙版)
     const exclusionMask = (x: number, y: number, w: number, h: number) => {
-      // 映射屏幕排版坐标到物理碰撞贴图坐标
-      // 由于字体是从基线向下绘制的，我们取字符中心点做碰撞检测
       const cx = Math.floor(((x + w / 2) / screenW) * this.COLS);
       const cy = Math.floor(((y + h / 2) / screenH) * this.ROWS);
 
@@ -94,14 +111,10 @@ class LyricsMaskEntity extends Entity {
 
       const idx = (cy * this.COLS + cx) * 4;
       const brightness = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
-
-      // Bad Apple 中人物是黑色的 (明度低)
-      // 如果明度低于阈值，说明撞到了物理轮廓，返回 true (排斥该字符)
       return brightness < 127;
     };
 
-    // 3. 启动 V8 Intl.Segmenter 全局折行引擎！(60FPS 实时计算万字折行)
-    // Pass empty atlas {} for standard monospace width fallback
+    // 3. 仅在视频帧变化时重排 (帧率受视频 FPS 限制，而非 rAF 60fps)
     const res = this.layoutEngine.layoutText(this.text, {}, this.fontSize, exclusionMask);
     this.nodes = res.nodes;
   }
@@ -162,7 +175,7 @@ async function bootstrap() {
   scene.add(lyricsEntity);
 
   scene.start();
-  setupFPSMonitor();
+  setupFPSMonitor('Lyrics Reflow', () => isRunning);
   setupNavBar('#bad-apple-lyrics');
 
   // 提供音频交互
@@ -188,37 +201,6 @@ async function bootstrap() {
     video.play();
     instruction.style.display = 'none';
   });
-}
-
-function setupFPSMonitor() {
-  const fpsEl = document.createElement('div');
-  fpsEl.style.position = 'absolute';
-  fpsEl.style.bottom = '10px';
-  fpsEl.style.right = '10px';
-  fpsEl.style.color = '#38bdf8';
-  fpsEl.style.fontFamily = 'monospace';
-  fpsEl.style.fontSize = '20px';
-  fpsEl.style.pointerEvents = 'none';
-  fpsEl.style.zIndex = '99';
-  document.body.appendChild(fpsEl);
-
-  let frames = 0;
-  let lastTime = performance.now();
-
-  function update() {
-    if (!isRunning) return; // HMR GC
-    frames++;
-    const now = performance.now();
-    if (now - lastTime >= 1000) {
-      const mem = (performance as any).memory;
-      const memStr = mem ? ` | Mem: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB` : '';
-      fpsEl.textContent = `FPS: ${frames}${memStr} | Realtime Lyrics Engine`;
-      frames = 0;
-      lastTime = now;
-    }
-    requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
 }
 
 bootstrap();

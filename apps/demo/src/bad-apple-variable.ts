@@ -1,5 +1,6 @@
 import { Scene, Entity } from '@vecto/core';
 import { setupNavBar } from './shared/navBar';
+import { setupFPSMonitor } from './shared/fpsMonitor';
 
 if ((window as any).__VECTO_HMR_CLEANUP) {
   (window as any).__VECTO_HMR_CLEANUP();
@@ -211,7 +212,7 @@ async function bootstrap() {
   };
 
   scene.start();
-  setupFPSMonitor();
+  setupFPSMonitor('Variable Font ASCII', () => isRunning);
   setupNavBar('#bad-apple-variable');
 
   const instruction = document.createElement('div');
@@ -236,37 +237,6 @@ async function bootstrap() {
     video.play();
     instruction.style.display = 'none';
   });
-}
-
-function setupFPSMonitor() {
-  const fpsEl = document.createElement('div');
-  fpsEl.style.position = 'absolute';
-  fpsEl.style.bottom = '10px';
-  fpsEl.style.right = '10px';
-  fpsEl.style.color = '#38bdf8';
-  fpsEl.style.fontFamily = 'monospace';
-  fpsEl.style.fontSize = '20px';
-  fpsEl.style.pointerEvents = 'none';
-  fpsEl.style.zIndex = '99';
-  document.body.appendChild(fpsEl);
-
-  let frames = 0;
-  let lastTime = performance.now();
-
-  function update() {
-    if (!isRunning) return;
-    frames++;
-    const now = performance.now();
-    if (now - lastTime >= 1000) {
-      const mem = (performance as any).memory;
-      const memStr = mem ? ` | Mem: ${(mem.usedJSHeapSize / 1048576).toFixed(1)}MB` : '';
-      fpsEl.textContent = `FPS: ${frames}${memStr} | Pretext Variable ASCII Demo`;
-      frames = 0;
-      lastTime = now;
-    }
-    requestAnimationFrame(update);
-  }
-  requestAnimationFrame(update);
 }
 
 bootstrap();
