@@ -41,7 +41,12 @@ export class LayoutEngine {
     this.charSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
   }
 
-  public layoutText(text: string, fontAtlas: GlyphAtlas, fontSize: number = 32): LayoutResult {
+  public layoutText(
+    text: string,
+    fontAtlas: GlyphAtlas,
+    fontSize: number = 32,
+    exclusionMask?: (x: number, y: number, w: number, h: number) => boolean,
+  ): LayoutResult {
     const layoutNodes: LayoutNode[] = [];
     let currentX = 0;
     let currentY = 0;
@@ -90,11 +95,27 @@ export class LayoutEngine {
             ? glyphInfo.width * (fontSize / glyphInfo.baseSize)
             : fontSize * 0.5;
 
-          // If a SINGLE word is wider than maxWidth, we MUST character-wrap it!
-          if (currentX + charWidth > this.maxWidth && currentX > 0) {
-            currentX = 0;
-            currentY += lineHeight;
+          // Dynamically find the next available spot that doesn't collide with the mask
+          let foundSpot = false;
+          while (currentY < this.maxHeight) {
+            // Line wrap
+            if (currentX + charWidth > this.maxWidth && currentX > 0) {
+              currentX = 0;
+              currentY += lineHeight;
+              continue;
+            }
+
+            // Check Exclusion Mask (Physics/Video collision)
+            if (exclusionMask && exclusionMask(currentX, currentY, charWidth, fontSize)) {
+              currentX += charWidth; // Skip over the masked shape
+              continue;
+            }
+
+            foundSpot = true;
+            break;
           }
+
+          if (!foundSpot || currentY >= this.maxHeight) break; // Out of bounds
 
           // Don't render invisible leading characters at the START of a new line
           if (currentX === 0 && char.trim().length === 0) {
