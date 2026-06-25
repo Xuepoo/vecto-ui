@@ -31,7 +31,19 @@ export class SpatialHashGrid {
     return keys;
   }
 
-  /** Insert or update an entity's bounding box in the grid. */
+  /**
+   * Insert or update an entity's axis-aligned bounding box in the grid.
+   *
+   * If the entity is already registered its old cell memberships are removed
+   * before the new ones are computed, so this method is safe to call every
+   * frame.
+   *
+   * @param id - Unique string identifier for the entity.
+   * @param x - Left edge of the AABB in world space.
+   * @param y - Top edge of the AABB in world space.
+   * @param w - Width of the AABB.
+   * @param h - Height of the AABB.
+   */
   insert(id: string, x: number, y: number, w: number, h: number): void {
     this.remove(id);
     const keys = this.cellsForAABB(x, y, w, h);
@@ -42,7 +54,13 @@ export class SpatialHashGrid {
     }
   }
 
-  /** Remove an entity from all grid cells. */
+  /**
+   * Remove an entity from all grid cells it currently occupies.
+   *
+   * Silently does nothing if the entity is not registered.
+   *
+   * @param id - Unique string identifier of the entity to remove.
+   */
   remove(id: string): void {
     const keys = this.entityCells.get(id);
     if (!keys) return;
@@ -52,7 +70,18 @@ export class SpatialHashGrid {
     this.entityCells.delete(id);
   }
 
-  /** Query all entity IDs whose cells overlap the given AABB. */
+  /**
+   * Return all entity IDs whose grid cells overlap the given AABB.
+   *
+   * Time complexity: O(k) where k is the number of cells the query AABB spans
+   * plus the number of results — O(1) average for small, similarly-sized entities.
+   *
+   * @param x - Left edge of the query AABB.
+   * @param y - Top edge of the query AABB.
+   * @param w - Width of the query AABB.
+   * @param h - Height of the query AABB.
+   * @returns A `Set` of entity ID strings whose cells intersect the query region.
+   */
   query(x: number, y: number, w: number, h: number): Set<string> {
     const result = new Set<string>();
     for (const key of this.cellsForAABB(x, y, w, h)) {
@@ -62,7 +91,11 @@ export class SpatialHashGrid {
     return result;
   }
 
-  /** Clear all cells and entity registrations. */
+  /**
+   * Clear all cells and entity registrations, resetting the grid to an empty state.
+   *
+   * Call once per frame before re-inserting all dynamic entities.
+   */
   clear(): void {
     this.grid.clear();
     this.entityCells.clear();

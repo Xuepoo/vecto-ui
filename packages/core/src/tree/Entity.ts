@@ -1,8 +1,14 @@
+/**
+ * A 2-D coordinate in canvas/world space.
+ */
 export interface Point {
   x: number;
   y: number;
 }
 
+/**
+ * Union of all pointer/interaction events that can be emitted by an {@link Entity}.
+ */
 export type VectoEvent =
   | 'click'
   | 'hover'
@@ -11,6 +17,24 @@ export type VectoEvent =
   | 'pointermove'
   | 'pointerleave';
 
+/**
+ * Base class for every node in the Virtual Math Tree (VMT).
+ *
+ * Subclass `Entity` and implement {@link isPointInside} and {@link render} to
+ * create custom drawable objects.  Entities form a scene-graph: each node may
+ * own child entities, inheriting the parent's transform.
+ *
+ * @example
+ * class CircleEntity extends Entity {
+ *   isPointInside(x: number, y: number) {
+ *     return Math.hypot(x - this.x, y - this.y) < 50;
+ *   }
+ *   render(r: IRenderer) {
+ *     r.beginPath();
+ *     r.fill('#38bdf8');
+ *   }
+ * }
+ */
 export abstract class Entity {
   public id: string;
   public children: Entity[] = [];
@@ -37,12 +61,24 @@ export abstract class Entity {
     this.id = id || `entity_${Math.random().toString(36).substring(2, 9)}`;
   }
 
+  /**
+   * Append a child entity to this node's children array.
+   *
+   * @param child - The entity to add as a child.
+   * @returns `this` for method chaining.
+   */
   public add(child: Entity): this {
     child.parent = this;
     this.children.push(child);
     return this;
   }
 
+  /**
+   * Remove a child entity from this node.
+   *
+   * @param child - The entity to remove.
+   * @returns `this` for method chaining.
+   */
   public remove(child: Entity): this {
     const index = this.children.indexOf(child);
     if (index !== -1) {
@@ -52,12 +88,31 @@ export abstract class Entity {
     return this;
   }
 
+  /**
+   * Set the local position of this entity.
+   *
+   * @param x - Horizontal position in local space.
+   * @param y - Vertical position in local space.
+   * @returns `this` for method chaining.
+   * @example entity.setPosition(100, 200);
+   */
   public setPosition(x: number, y: number): this {
     this.x = x;
     this.y = y;
     return this;
   }
 
+  /**
+   * Queue a tween animation toward the specified target property values.
+   *
+   * Multiple calls chain animations sequentially.  Only numeric properties
+   * are interpolated; non-numeric values are ignored.
+   *
+   * @param targetProps - Partial set of numeric properties to tween to.
+   * @param durationMs - Duration of the tween in milliseconds.
+   * @returns `this` for method chaining.
+   * @example entity.animate({ x: 400, opacity: 0 }, 500);
+   */
   public animate(targetProps: Partial<this>, durationMs: number): this {
     this.animations.push({
       target: targetProps,
@@ -68,6 +123,15 @@ export abstract class Entity {
     return this;
   }
 
+  /**
+   * Advance the entity's internal state for one frame.
+   *
+   * Called automatically by the {@link Scene} render loop — override in
+   * subclasses to implement custom per-frame logic.
+   *
+   * @param dt - Elapsed time since the last frame in milliseconds.
+   * @param time - Absolute timestamp from `performance.now()`.
+   */
   public update(dt: number, time: number): void {
     if (this.animations.length > 0) {
       const anim = this.animations[0];
@@ -95,6 +159,14 @@ export abstract class Entity {
     }
   }
 
+  /**
+   * Register a listener for a {@link VectoEvent}.
+   *
+   * @param event - The event name to listen for.
+   * @param callback - Handler invoked when the event is emitted.
+   * @returns `this` for method chaining.
+   * @example entity.on('click', (e) => console.log('clicked', e));
+   */
   public on(event: VectoEvent, callback: (e: any) => void): this {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, []);
@@ -103,6 +175,12 @@ export abstract class Entity {
     return this;
   }
 
+  /**
+   * Dispatch a {@link VectoEvent} to all registered listeners on this entity.
+   *
+   * @param event - The event name to dispatch.
+   * @param payload - Arbitrary data forwarded to each listener.
+   */
   public emit(event: VectoEvent, payload: any): void {
     const handlers = this.listeners.get(event);
     if (handlers) {
@@ -110,6 +188,12 @@ export abstract class Entity {
     }
   }
 
+  /**
+   * Compute the entity's position in world/canvas space by accumulating
+   * local offsets up the scene-graph hierarchy.
+   *
+   * @returns World-space {@link Point} for this entity.
+   */
   public getGlobalPosition(): Point {
     let px = this.x;
     let py = this.y;
@@ -122,6 +206,23 @@ export abstract class Entity {
     return { x: px, y: py };
   }
 
+  /**
+   * Return `true` when the given world-space point lies within this entity's
+   * interactive hit area.
+   *
+   * @param globalX - World-space X coordinate.
+   * @param globalY - World-space Y coordinate.
+   * @returns Whether the point is inside this entity.
+   */
   public abstract isPointInside(globalX: number, globalY: number): boolean;
+
+  /**
+   * Draw this entity using the provided renderer.
+   *
+   * Called each frame after the entity's transform has been pushed onto the
+   * renderer's matrix stack.
+   *
+   * @param renderer - The active renderer instance.
+   */
   public abstract render(renderer: any): void;
 }

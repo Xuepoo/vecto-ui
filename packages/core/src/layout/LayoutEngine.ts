@@ -1,3 +1,9 @@
+/**
+ * Map from a single grapheme character to its pre-measured glyph metrics.
+ *
+ * Each entry provides the glyph's pixel `width` at `baseSize`, and an `ast`
+ * property holding the raw vector path data used by the renderer.
+ */
 export interface GlyphAtlas {
   [char: string]: {
     width: number;
@@ -6,6 +12,9 @@ export interface GlyphAtlas {
   };
 }
 
+/**
+ * A single positioned glyph produced by {@link LayoutEngine.layoutText}.
+ */
 export interface LayoutNode {
   char: string;
   x: number;
@@ -14,6 +23,10 @@ export interface LayoutNode {
   height: number;
 }
 
+/**
+ * The complete output of a text layout pass — an ordered list of positioned
+ * glyphs and the total bounding-box dimensions.
+ */
 export interface LayoutResult {
   nodes: LayoutNode[];
   totalWidth: number;
@@ -41,6 +54,24 @@ export class LayoutEngine {
     this.charSegmenter = new Intl.Segmenter(locale, { granularity: 'grapheme' });
   }
 
+  /**
+   * Lay out a Unicode string into a list of positioned {@link LayoutNode} glyphs.
+   *
+   * Uses `Intl.Segmenter` to correctly handle CJK, emoji, and Western word
+   * boundaries.  An optional `exclusionMask` callback allows glyphs to flow
+   * around arbitrary shapes (e.g. physics bodies or video regions).
+   *
+   * @param text - The raw text string to lay out (newlines force paragraph breaks).
+   * @param fontAtlas - Pre-measured glyph metrics keyed by grapheme character.
+   * @param fontSize - Target font size in pixels (default: `32`).
+   * @param exclusionMask - Optional callback returning `true` when a candidate
+   *   glyph bounding box overlaps a forbidden region; the engine skips that
+   *   position and advances horizontally.
+   * @returns A {@link LayoutResult} with all positioned glyph nodes and total dimensions.
+   * @example
+   * const result = engine.layoutText('Hello 世界', atlas, 24);
+   * result.nodes.forEach(n => console.log(n.char, n.x, n.y));
+   */
   public layoutText(
     text: string,
     fontAtlas: GlyphAtlas,
