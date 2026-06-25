@@ -9,6 +9,8 @@ async function loadDemo() {
     await import('./bad-apple-classic.ts');
   } else if (hash === '#bad-apple-variable') {
     await import('./bad-apple-variable.ts');
+  } else if (hash === '#tight-bubbles') {
+    await import('./tight-bubbles.ts');
   } else {
     await import('./physics.ts');
   }
