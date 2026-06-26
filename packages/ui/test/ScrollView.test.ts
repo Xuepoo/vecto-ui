@@ -28,6 +28,11 @@ function wheelEvent(deltaY: number): {
   };
 }
 
+/** A pointer-event stand-in carrying a clientY. */
+function pointer(clientY: number): { clientY: number; preventDefault: () => void } {
+  return { clientY, preventDefault: () => {} };
+}
+
 /** Run the spring integrator until the content settles on its target. */
 function settle(sv: ScrollView): void {
   for (let i = 0; i < 600; i++) sv.update(16, i * 16);
@@ -97,5 +102,33 @@ describe('ScrollView', () => {
     sv.updateContentSize(); // maxScroll = 20
     settle(sv);
     expect(sv.content.y).toBeCloseTo(-20, 0);
+  });
+
+  it('drag scrolls the content (touch / mouse pointer-drag)', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300)); // maxScroll = 200
+    sv.emit('pointerdown', pointer(100));
+    sv.emit('pointermove', pointer(60)); // finger up 40 → content follows up 40
+    sv.emit('pointerup', pointer(60));
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-40, 0);
+  });
+
+  it('ignores pointermove unless a drag is active', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300));
+    sv.emit('pointermove', pointer(60)); // no pointerdown first
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(0, 0);
+  });
+
+  it('clamps a drag to the content bounds', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300));
+    sv.emit('pointerdown', pointer(500));
+    sv.emit('pointermove', pointer(0)); // finger up 500 → clamp to −maxScroll
+    sv.emit('pointerup', pointer(0));
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-200, 0);
   });
 });
