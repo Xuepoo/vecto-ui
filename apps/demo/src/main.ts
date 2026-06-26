@@ -166,7 +166,7 @@ class MagneticText extends Entity {
 
 function bootstrap() {
   document.body.innerHTML = '';
-  document.body.style.cssText = 'margin:0;overflow:hidden;background:#0b1020';
+  document.body.style.cssText = 'margin:0;overflow-x:hidden;background:#0b1020';
 
   const proxy = document.createElement('div');
   proxy.style.cssText =
@@ -178,7 +178,7 @@ function bootstrap() {
   document.body.appendChild(parent);
 
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = 'position:fixed;top:0;left:0;z-index:1';
+  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1';
   parent.appendChild(canvas);
 
   const scene = new Scene(canvas);
@@ -188,7 +188,7 @@ function bootstrap() {
 
   // The text takes ~230px vertically, and the card takes 320px.
   // We use startY to center the whole group vertically.
-  const startY = cy - 290;
+  const startY = Math.max(40, cy - 290);
 
   const text = new MagneticText(
     [
