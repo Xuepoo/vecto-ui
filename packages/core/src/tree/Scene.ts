@@ -1,4 +1,4 @@
-import { Entity } from './Entity';
+import { Entity, VectoUIEvent } from './Entity';
 import { CanvasRenderer } from '../renderer/CanvasRenderer';
 import { IRenderer } from '../renderer/IRenderer';
 import { createWebGLPointRenderer, type PointRenderer } from '../renderer/WebGLPointRenderer';
@@ -324,27 +324,41 @@ export class Scene {
           el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault(); // stop Space from scrolling the page
-              node.emit('click', e);
+              node.dispatchEvent(new VectoUIEvent('click', node, e));
             }
           });
         }
 
-        // Map DOM events to Canvas ECS Engine
-        el.addEventListener('click', (e) => node.emit('click', e));
+        // Map DOM events to the entity tree (capture + bubble). Pointer/wheel
+        // events bubble so an ancestor (e.g. a draggable list) can react and
+        // stopPropagation; enter/leave don't bubble, matching the DOM.
+        el.addEventListener('click', (e) => node.dispatchEvent(new VectoUIEvent('click', node, e)));
         el.addEventListener('mouseenter', (e) => {
           if (this.debugA11y) el!.style.backgroundColor = 'rgba(56, 189, 248, 0.2)';
-          node.emit('hover', e);
+          node.dispatchEvent(new VectoUIEvent('hover', node, e, false));
         });
         el.addEventListener('mouseleave', (e) => {
           if (this.debugA11y) el!.style.backgroundColor = 'rgba(56, 189, 248, 0.05)';
-          node.emit('pointerleave', e);
+          node.dispatchEvent(new VectoUIEvent('pointerleave', node, e, false));
         });
-        el.addEventListener('pointerdown', (e) => node.emit('pointerdown', e));
-        el.addEventListener('pointerup', (e) => node.emit('pointerup', e));
-        el.addEventListener('pointermove', (e) => node.emit('pointermove', e));
+        el.addEventListener('pointerdown', (e) =>
+          node.dispatchEvent(new VectoUIEvent('pointerdown', node, e)),
+        );
+        el.addEventListener('pointerup', (e) =>
+          node.dispatchEvent(new VectoUIEvent('pointerup', node, e)),
+        );
+        el.addEventListener('pointermove', (e) =>
+          node.dispatchEvent(new VectoUIEvent('pointermove', node, e)),
+        );
         // Non-passive so a scroll container (e.g. ScrollView) can call
         // preventDefault() to stop the page from scrolling underneath it.
-        el.addEventListener('wheel', (e) => node.emit('wheel', e), { passive: false });
+        el.addEventListener(
+          'wheel',
+          (e) => node.dispatchEvent(new VectoUIEvent('wheel', node, e)),
+          {
+            passive: false,
+          },
+        );
 
         // Form-control changes (text input / checkbox) flow back to the entity.
         if (el instanceof HTMLInputElement) {

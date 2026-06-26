@@ -99,7 +99,11 @@ describe('Entity event propagation', () => {
   it('preventDefault and field reads delegate to the wrapped native event', () => {
     const { leaf } = chain();
     let prevented = false;
-    const native = { deltaY: 42, preventDefault: () => (prevented = true), defaultPrevented: false };
+    const native = {
+      deltaY: 42,
+      preventDefault: () => (prevented = true),
+      defaultPrevented: false,
+    };
     let dy: number | undefined;
     leaf.on('wheel', (e: VectoUIEvent) => {
       dy = e.deltaY;
