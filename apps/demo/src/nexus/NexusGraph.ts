@@ -19,6 +19,10 @@ export class NexusNode extends Entity {
 
   public shape: 'circle' | 'text' = 'circle';
 
+  isPointInside(_x: number, _y: number): boolean {
+    return false; // Fast path!
+  }
+
   getBatchCircle() {
     if (this.shape === 'text') return null;
     return { radius: this.radius, color: this.color };
@@ -208,10 +212,6 @@ export class NexusGraph extends Entity {
 
     const friction = 0.94;
     const frames = Math.min(dt, 32) / 16.67;
-
-    const padding = 100;
-    const domainW = window.innerWidth + padding * 2;
-    const domainH = window.innerHeight + padding * 2;
 
     // 1. Spring Forces (O(E))
     for (const edge of this.edges) {
