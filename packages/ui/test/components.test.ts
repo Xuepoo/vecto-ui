@@ -461,4 +461,17 @@ describe('Markdown', () => {
     expect((md.content.children[0] as Text).text).toBe('Title');
     expect((md.content.children[1] as Text).text).toBe('Some text.');
   });
+
+  it('renders code blocks and lists', () => {
+    const md = new Markdown('```\nconst a = 1;\n```\n- item 1\n- item 2', { maxWidth: 400 });
+    expect(md.content.children.length).toBe(2); // code block, list
+
+    const code = md.content.children[0] as Text;
+    expect(code.text).toBe('const a = 1;');
+    expect(code.font).toContain('monospace');
+
+    const list = md.content.children[1] as Stack;
+    expect(list.children.length).toBe(2);
+    expect((list.children[0] as Text).text).toBe('• item 1');
+  });
 });
