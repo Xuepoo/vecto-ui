@@ -46,6 +46,17 @@ export interface IRenderer {
    */
   setGlobalAlpha(alpha: number): void;
 
+  /**
+   * Intersect the current clip region with a rectangle. Affects all subsequent
+   * draws until the next {@link restore}; wrap in {@link save}/{@link restore}.
+   *
+   * @param x - Left edge.
+   * @param y - Top edge.
+   * @param width - Rectangle width.
+   * @param height - Rectangle height.
+   */
+  clip(x: number, y: number, width: number, height: number): void;
+
   /** Begin a new sub-path, discarding the current path. */
   beginPath(): void;
   /**

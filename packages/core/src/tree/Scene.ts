@@ -281,9 +281,41 @@ export class Scene {
         // Form-control changes (text input / checkbox) flow back to the entity.
         if (el instanceof HTMLInputElement) {
           const input = el;
-          const forward = () => node.emit('change', { value: input.value, checked: input.checked });
+          // Active IME pre-edit range, tracked across composition events so the
+          // canvas can underline the composing segment.
+          let composition: { start: number; length: number } | null = null;
+          const forward = () =>
+            node.emit('change', {
+              value: input.value,
+              checked: input.checked,
+              selectionStart: input.selectionStart ?? input.value.length,
+              selectionEnd: input.selectionEnd ?? input.value.length,
+              composition,
+            });
           el.addEventListener('input', forward);
           el.addEventListener('change', forward);
+          // Caret/selection moves that don't change the value (arrows, click, drag).
+          el.addEventListener('keyup', forward);
+          el.addEventListener('click', forward);
+          el.addEventListener('select', forward);
+          // IME composition: the real input holds the pre-edit text; we just track
+          // its [start, length) so the canvas can render it underlined.
+          el.addEventListener('compositionstart', () => {
+            composition = { start: input.selectionStart ?? input.value.length, length: 0 };
+            forward();
+          });
+          el.addEventListener('compositionupdate', (e) => {
+            const data = (e as CompositionEvent).data ?? '';
+            composition = { start: composition?.start ?? 0, length: data.length };
+            forward();
+          });
+          el.addEventListener('compositionend', () => {
+            composition = null;
+            forward();
+          });
+          // Focus state drives the canvas caret blink.
+          el.addEventListener('focus', () => node.emit('focus', {}));
+          el.addEventListener('blur', () => node.emit('blur', {}));
         }
 
         this.a11yRoot.appendChild(el);
