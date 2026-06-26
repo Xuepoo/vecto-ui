@@ -264,6 +264,36 @@ export class Scene {
           el.style.background = 'transparent';
         }
 
+        // Keyboard accessibility for non-natively-focusable interactive controls
+        // (e.g. a div with role="switch"): make them Tab-focusable and a
+        // Enter/Space. Native <button>/<a href>/<input> already handle this; landmark
+        // roles like "group" must stay non-focusable.
+        const INTERACTIVE_ROLES = new Set([
+          'button',
+          'switch',
+          'checkbox',
+          'radio',
+          'link',
+          'tab',
+          'menuitem',
+          'slider',
+        ]);
+        const nativelyFocusable =
+          el instanceof HTMLButtonElement ||
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLSelectElement ||
+          el instanceof HTMLTextAreaElement ||
+          (el instanceof HTMLAnchorElement && !!attrs.href);
+        if (!nativelyFocusable && attrs.role && INTERACTIVE_ROLES.has(attrs.role)) {
+          el.setAttribute('tabindex', '0');
+          el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault(); // stop Space from scrolling the page
+              node.emit('click', e);
+            }
+          });
+        }
+
         // Map DOM events to Canvas ECS Engine
         el.addEventListener('click', (e) => node.emit('click', e));
         el.addEventListener('mouseenter', (e) => {
