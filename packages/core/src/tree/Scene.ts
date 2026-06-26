@@ -342,7 +342,9 @@ export class Scene {
         el.addEventListener('pointerdown', (e) => node.emit('pointerdown', e));
         el.addEventListener('pointerup', (e) => node.emit('pointerup', e));
         el.addEventListener('pointermove', (e) => node.emit('pointermove', e));
-        el.addEventListener('wheel', (e) => node.emit('wheel', e));
+        // Non-passive so a scroll container (e.g. ScrollView) can call
+        // preventDefault() to stop the page from scrolling underneath it.
+        el.addEventListener('wheel', (e) => node.emit('wheel', e), { passive: false });
 
         // Form-control changes (text input / checkbox) flow back to the entity.
         if (el instanceof HTMLInputElement) {

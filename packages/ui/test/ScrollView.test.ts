@@ -1,0 +1,101 @@
+// @vitest-environment jsdom
+import { describe, it, expect } from 'vitest';
+import { Entity } from '@vecto-ui/core';
+import { ScrollView } from '../src/index';
+
+/** A fixed-size leaf so the ScrollView has measurable content. */
+class Box extends Entity {
+  constructor(w: number, h: number) {
+    super();
+    this.width = w;
+    this.height = h;
+  }
+  isPointInside(): boolean {
+    return false;
+  }
+  render(): void {}
+}
+
+/** Build a wheel-event stand-in that records preventDefault(). */
+function wheelEvent(deltaY: number): {
+  evt: { deltaY: number; preventDefault: () => void };
+  pd: () => boolean;
+} {
+  let prevented = false;
+  return {
+    evt: { deltaY, preventDefault: () => (prevented = true) },
+    pd: () => prevented,
+  };
+}
+
+/** Run the spring integrator until the content settles on its target. */
+function settle(sv: ScrollView): void {
+  for (let i = 0; i < 600; i++) sv.update(16, i * 16);
+}
+
+describe('ScrollView', () => {
+  it('is an interactive, clip-children viewport sized to its box', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    expect(sv.interactive).toBe(true);
+    expect(sv.clipChildren).toBe(true);
+    expect(sv.width).toBe(200);
+    expect(sv.height).toBe(100);
+    expect(sv.getBounds()).toEqual({ x: 0, y: 0, width: 200, height: 100 });
+  });
+
+  it('nests children in the content layer and measures the content extent', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300));
+    expect(sv.content.children).toHaveLength(1);
+    expect(sv.content.height).toBe(300);
+    expect(sv.content.width).toBe(50);
+  });
+
+  it('scrolls the content on wheel and calls preventDefault', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300)); // maxScroll = 300 − 100 = 200
+    const { evt, pd } = wheelEvent(50);
+    sv.emit('wheel', evt);
+    expect(pd()).toBe(true);
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-50, 0); // scrolled down by 50
+  });
+
+  it('clamps at the bottom — cannot scroll past the content end', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300));
+    sv.emit('wheel', wheelEvent(10000).evt); // far past the end
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-200, 0); // clamped to −maxScroll
+  });
+
+  it('clamps at the top — cannot scroll above the start', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 300));
+    sv.emit('wheel', wheelEvent(-10000).evt); // pull above the top
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(0, 0);
+  });
+
+  it('does not scroll when content fits inside the viewport', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    sv.add(new Box(50, 40)); // shorter than the viewport → maxScroll = 0
+    sv.emit('wheel', wheelEvent(500).evt);
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(0, 0);
+  });
+
+  it('re-clamps the scroll offset when content shrinks', () => {
+    const sv = new ScrollView({ width: 200, height: 100 });
+    const tall = new Box(50, 300);
+    sv.add(tall);
+    sv.emit('wheel', wheelEvent(10000).evt); // scrolled to bottom (−200)
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-200, 0);
+
+    tall.height = 120; // content now only slightly taller than the viewport
+    sv.updateContentSize(); // maxScroll = 20
+    settle(sv);
+    expect(sv.content.y).toBeCloseTo(-20, 0);
+  });
+});
