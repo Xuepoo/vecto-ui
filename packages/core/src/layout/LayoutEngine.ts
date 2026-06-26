@@ -86,6 +86,7 @@ export interface PreparedText {
 export class LayoutEngine {
   public maxWidth: number;
   public maxHeight: number;
+  public preserveLeadingSpaces: boolean = false;
   private wordSegmenter: Intl.Segmenter;
   private charSegmenter: Intl.Segmenter;
   private wordCache: Map<string, Array<{ segment: string; isWordLike: boolean | undefined }>> =
@@ -268,7 +269,8 @@ export class LayoutEngine {
           if (!foundSpot || currentY >= this.maxHeight) break; // Out of bounds
 
           // Don't render invisible leading characters at the START of a new line
-          if (currentX === 0 && glyph.char.trim().length === 0) continue;
+          if (currentX === 0 && glyph.char.trim().length === 0 && !this.preserveLeadingSpaces)
+            continue;
 
           layoutNodes.push({
             char: glyph.char,
