@@ -17,6 +17,9 @@ export class ScrollView extends UIComponent {
   private velocityY: number = 0;
   private readonly friction: number = 0.85;
   private readonly spring: number = 0.1;
+  // Pointer-drag (touch / mouse) state.
+  private dragging: boolean = false;
+  private lastPointerY: number = 0;
 
   constructor(opts: ScrollViewOptions) {
     super('ScrollView');
@@ -35,17 +38,34 @@ export class ScrollView extends UIComponent {
 
     this.on('wheel', (e: WheelEvent) => {
       e.preventDefault();
-      // Apply delta to targetY
       this.targetY -= e.deltaY;
-
-      const maxScroll = Math.max(0, this.content.height - this.height);
-      // Soft clamp - allows pulling past the edge before springing back
-      if (this.targetY > 0) {
-        this.targetY = 0; // Hard clamp for now, can add rubber-banding later
-      } else if (this.targetY < -maxScroll) {
-        this.targetY = -maxScroll;
-      }
+      this.clampTarget();
     });
+
+    // Pointer-drag (touch & mouse): content follows the finger/cursor 1:1.
+    this.on('pointerdown', (e: { clientY?: number }) => {
+      this.dragging = true;
+      this.lastPointerY = e.clientY ?? 0;
+    });
+    this.on('pointermove', (e: { clientY?: number }) => {
+      if (!this.dragging) return;
+      const y = e.clientY ?? 0;
+      this.targetY += y - this.lastPointerY;
+      this.lastPointerY = y;
+      this.clampTarget();
+    });
+    const endDrag = () => {
+      this.dragging = false;
+    };
+    this.on('pointerup', endDrag);
+    this.on('pointerleave', endDrag);
+  }
+
+  /** Clamp the scroll target to `[-maxScroll, 0]` (top and content-end edges). */
+  private clampTarget(): void {
+    const maxScroll = Math.max(0, this.content.height - this.height);
+    if (this.targetY > 0) this.targetY = 0;
+    else if (this.targetY < -maxScroll) this.targetY = -maxScroll;
   }
 
   public add(child: Entity): this {

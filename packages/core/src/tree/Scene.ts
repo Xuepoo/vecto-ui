@@ -280,6 +280,10 @@ export class Scene {
         }
         el.style.position = 'absolute';
         el.style.pointerEvents = 'auto'; // allow Playwright/Agent to click!
+        // The canvas owns its gestures: stop the browser from claiming touch
+        // drags (scroll/zoom) that start on an interactive surface, so
+        // pointer-drag (e.g. ScrollView) works on touch devices.
+        el.style.touchAction = 'none';
         // A full-viewport background surface uses the default cursor (it's not a
         // button); discrete controls show the pointer cursor.
         el.style.cursor = node.a11yFullViewport ? 'default' : 'pointer';
@@ -341,12 +345,18 @@ export class Scene {
           if (this.debugA11y) el!.style.backgroundColor = 'rgba(56, 189, 248, 0.05)';
           node.dispatchEvent(new VectoUIEvent('pointerleave', node, e, false));
         });
-        el.addEventListener('pointerdown', (e) =>
-          node.dispatchEvent(new VectoUIEvent('pointerdown', node, e)),
-        );
-        el.addEventListener('pointerup', (e) =>
-          node.dispatchEvent(new VectoUIEvent('pointerup', node, e)),
-        );
+        const capEl = el;
+        el.addEventListener('pointerdown', (e) => {
+          // Capture so the drag keeps getting pointermove/up even once the
+          // pointer leaves this node's box (e.g. dragging a ScrollView fast).
+          if (typeof capEl.setPointerCapture === 'function') capEl.setPointerCapture(e.pointerId);
+          node.dispatchEvent(new VectoUIEvent('pointerdown', node, e));
+        });
+        el.addEventListener('pointerup', (e) => {
+          if (typeof capEl.releasePointerCapture === 'function')
+            capEl.releasePointerCapture(e.pointerId);
+          node.dispatchEvent(new VectoUIEvent('pointerup', node, e));
+        });
         el.addEventListener('pointermove', (e) =>
           node.dispatchEvent(new VectoUIEvent('pointermove', node, e)),
         );
