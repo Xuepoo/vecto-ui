@@ -1,5 +1,6 @@
 import { Entity, VectoUIEvent } from './Entity';
 import { CanvasRenderer } from '../renderer/CanvasRenderer';
+import { SVGRenderer } from '../renderer/SVGRenderer';
 import { IRenderer } from '../renderer/IRenderer';
 import { createWebGLPointRenderer, type PointRenderer } from '../renderer/WebGLPointRenderer';
 
@@ -552,8 +553,37 @@ export class Scene {
       return;
     }
 
-    this.renderer.clear();
-    this.pointRenderer?.begin();
+    this.render(this.renderer, dt, time);
+
+    // Sync Automation Shadow DOM (skip the whole walk when nothing is
+    // interactive). Throttled to a11ySyncInterval so heavy animation doesn't pay
+    // per-frame DOM writes — the a11y layer just becomes eventually consistent.
+    if (
+      (this.a11ySyncInterval <= 0 || time - this.lastA11ySync >= this.a11ySyncInterval) &&
+      (this.hasAnyInteractive(this.root) || this.hasAnyInteractive(this.overlayRoot))
+    ) {
+      this.lastA11ySync = time;
+      this.syncA11y(this.root);
+    }
+
+    this.dirty = false;
+
+    requestAnimationFrame((t) => this.loop(t));
+  }
+
+  /**
+   * Render the entire scene graph onto the specified renderer.
+   *
+   * @param renderer - The renderer instance to draw to.
+   * @param dt - Delta time in milliseconds (default 0).
+   * @param time - Current absolute time in milliseconds (default 0).
+   */
+  public render(renderer: IRenderer, dt = 0, time = 0): void {
+    renderer.clear();
+    const isMainRenderer = renderer === this.renderer;
+    if (isMainRenderer) {
+      this.pointRenderer?.begin();
+    }
 
     const vw = typeof window !== 'undefined' ? window.innerWidth : 0;
     const vh = typeof window !== 'undefined' ? window.innerHeight : 0;
@@ -619,7 +649,7 @@ export class Scene {
         const bc = node.getBatchCircle();
         if (bc) {
           if (visible) {
-            if (this.pointRenderer) {
+            if (isMainRenderer && this.pointRenderer) {
               // GPU layer: emit in world coords (center = (te,tf), radius scaled
               // by the accumulated uniform scale = hypot(a,b)).
               this.pointRenderer.addCircle(
@@ -630,13 +660,7 @@ export class Scene {
                 node.opacity,
               );
             } else {
-              this.renderer.fillCircle(
-                node.x,
-                node.y,
-                bc.radius * node.scaleX,
-                bc.color,
-                node.opacity,
-              );
+              renderer.fillCircle(node.x, node.y, bc.radius * node.scaleX, bc.color, node.opacity);
             }
           }
           return;
@@ -644,7 +668,7 @@ export class Scene {
         // GPU instanced rectangle (WebGL backend only; otherwise falls through
         // to the normal render path below). Origin (te,tf), world scale hypot(a,b),
         // rotation atan2(b,a).
-        if (this.pointRenderer) {
+        if (isMainRenderer && this.pointRenderer) {
           const br = node.getBatchRect();
           if (br) {
             if (visible) {
@@ -666,47 +690,43 @@ export class Scene {
 
       // Any normal (non-batched) draw must commit the pending batch first so
       // painter's order is preserved across the sibling group.
-      this.renderer.flush();
-      this.renderer.save();
-      this.renderer.translate(node.x, node.y);
-      this.renderer.scale(node.scaleX, node.scaleY);
-      this.renderer.rotate(node.rotation);
-      this.renderer.setGlobalAlpha(node.opacity);
+      renderer.flush();
+      renderer.save();
+      renderer.translate(node.x, node.y);
+      renderer.scale(node.scaleX, node.scaleY);
+      renderer.rotate(node.rotation);
+      renderer.setGlobalAlpha(node.opacity);
 
-      if (visible) node.render(this.renderer);
+      if (visible) node.render(renderer);
 
       if (node.clipChildren) {
-        this.renderer.clip(0, 0, node.width, node.height);
+        renderer.clip(0, 0, node.width, node.height);
       }
 
       for (const child of node.children) {
         renderNode(child, a, b, c, d, te, tf);
       }
       // Commit any batched leaf children before popping this node's transform.
-      this.renderer.flush();
-      this.renderer.restore();
+      renderer.flush();
+      renderer.restore();
     };
 
     renderNode(this.root, 1, 0, 0, 1, 0, 0);
     for (const overlay of this.overlayRoot.children) {
       renderNode(overlay, 1, 0, 0, 1, 0, 0);
     }
-    this.renderer.flush();
-    this.pointRenderer?.flush();
-
-    // Sync Automation Shadow DOM (skip the whole walk when nothing is
-    // interactive). Throttled to a11ySyncInterval so heavy animation doesn't pay
-    // per-frame DOM writes — the a11y layer just becomes eventually consistent.
-    if (
-      (this.a11ySyncInterval <= 0 || time - this.lastA11ySync >= this.a11ySyncInterval) &&
-      (this.hasAnyInteractive(this.root) || this.hasAnyInteractive(this.overlayRoot))
-    ) {
-      this.lastA11ySync = time;
-      this.syncA11y(this.root);
+    renderer.flush();
+    if (isMainRenderer) {
+      this.pointRenderer?.flush();
     }
+  }
 
-    this.dirty = false;
-
-    requestAnimationFrame((t) => this.loop(t));
+  /**
+   * Export the current scene state to a lightweight, flat SVG XML string.
+   */
+  public toSVG(): string {
+    const renderer = new SVGRenderer(this.width, this.height);
+    this.render(renderer, 0, 0);
+    return renderer.toXMLString();
   }
 }

@@ -53,6 +53,12 @@ class TestEntity extends Entity {
 }
 
 describe('Scene', () => {
+  it('should support export to SVG XML string via toSVG()', () => {
+    const scene = new Scene(mockCanvas as any);
+    const xml = scene.toSVG();
+    expect(xml).toContain('svg');
+  });
+
   it('add() increases root child count', () => {
     const scene = new Scene(mockCanvas as any);
     const e = new TestEntity();
