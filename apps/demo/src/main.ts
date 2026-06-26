@@ -23,7 +23,7 @@ function bootstrap() {
   // Left Panel - Glassmorphism UI
   const leftCard = new Card({
     width: 320,
-    height: 460,
+    height: 500,
     bg: 'rgba(20, 20, 30, 0.65)',
     border: 'rgba(255, 255, 255, 0.1)',
     padding: 24,
@@ -104,8 +104,24 @@ function bootstrap() {
   });
   leftStack.add(themeBtn);
 
+  let isTextShape = false;
+  const shapeBtn = new Button('Shape: Circle', {
+    bg: 'rgba(255, 255, 255, 0.1)',
+    hoverBg: 'rgba(255, 255, 255, 0.2)',
+    color: '#ffffff',
+    radius: 8,
+    font: '600 14px "Outfit", sans-serif',
+  });
+  shapeBtn.width = 240;
+  shapeBtn.on('click', () => {
+    isTextShape = !isTextShape;
+    shapeBtn.label = isTextShape ? 'Shape: @ Text' : 'Shape: Circle';
+    nexus.changeShape(isTextShape ? 'text' : 'circle');
+  });
+  leftStack.add(shapeBtn);
+
   leftCard.add(leftStack.setPosition(24, 24));
-  scene.add(leftCard.setPosition(40, window.innerHeight / 2 - 230));
+  scene.add(leftCard.setPosition(40, window.innerHeight / 2 - 250));
 
   // Right Panel - Monitor
   const rightCard = new Card({
@@ -180,7 +196,7 @@ function bootstrap() {
 
   // Responsive resize
   window.addEventListener('resize', () => {
-    leftCard.y = window.innerHeight / 2 - 230;
+    leftCard.y = window.innerHeight / 2 - 250;
     rightCard.x = window.innerWidth - 320;
     rightCard.y = window.innerHeight / 2 - 100;
   });

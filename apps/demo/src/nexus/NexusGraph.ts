@@ -17,7 +17,10 @@ export class NexusNode extends Entity {
     this.interactive = false; // Fast path!
   }
 
+  public shape: 'circle' | 'text' = 'circle';
+
   getBatchCircle() {
+    if (this.shape === 'text') return null;
     return { radius: this.radius, color: this.color };
   }
 
@@ -25,7 +28,11 @@ export class NexusNode extends Entity {
     return { x: -this.radius, y: -this.radius, width: this.radius * 2, height: this.radius * 2 };
   }
 
-  render() {}
+  render(r: IRenderer) {
+    if (this.shape === 'text') {
+      r.fillText('@', -this.radius, this.radius, '12px monospace', this.color);
+    }
+  }
 }
 
 export class NexusGraph extends Entity {
@@ -152,6 +159,12 @@ export class NexusGraph extends Entity {
     }
     for (const node of this.nodes) {
       node.color = this.currentColors[Math.floor(Math.random() * this.currentColors.length)];
+    }
+  }
+
+  changeShape(shape: 'circle' | 'text') {
+    for (const node of this.nodes) {
+      node.shape = shape;
     }
   }
 
