@@ -99,6 +99,101 @@ export type VectoEvent =
   // native `WheelEvent` (call `preventDefault()` to stop the page scrolling).
   | 'wheel';
 
+/** Options for {@link Entity.on} / {@link Entity.off}. */
+export interface ListenerOptions {
+  /** Register the listener for the capture phase (root→target) instead of bubble. */
+  capture?: boolean;
+}
+
+/**
+ * A propagating event dispatched through the entity tree by
+ * {@link Entity.dispatchEvent} (DOM-like capture + bubble).
+ *
+ * It wraps the originating browser event (`nativeEvent`) and adds tree-aware
+ * fields: `target` (where it originated), `currentTarget` (the node currently
+ * handling it), and `stopPropagation()`. Common native fields (`deltaY`,
+ * `clientX`, `key`, …) and `preventDefault()` pass through to `nativeEvent`, so
+ * handlers written against the raw DOM event keep working.
+ */
+export class VectoUIEvent<N = unknown> {
+  /** The event name. */
+  readonly type: VectoEvent;
+  /** The entity the event originated on. */
+  readonly target: Entity;
+  /** The entity whose listeners are currently running (updated per node). */
+  currentTarget: Entity;
+  /** The wrapped browser event, if any. */
+  readonly nativeEvent: N | undefined;
+  /** Whether the event bubbles past its target (capture always runs). */
+  readonly bubbles: boolean;
+  private stopped = false;
+  private stoppedImmediate = false;
+
+  constructor(type: VectoEvent, target: Entity, nativeEvent?: N, bubbles: boolean = true) {
+    this.type = type;
+    this.target = target;
+    this.currentTarget = target;
+    this.nativeEvent = nativeEvent;
+    this.bubbles = bubbles;
+  }
+
+  /** Stop the event from reaching the next node in the propagation path. */
+  stopPropagation(): void {
+    this.stopped = true;
+  }
+
+  /** Stop propagation AND skip any remaining listeners on the current node. */
+  stopImmediatePropagation(): void {
+    this.stopped = true;
+    this.stoppedImmediate = true;
+  }
+
+  /** Forward to the native event's `preventDefault` (e.g. stop page scroll). */
+  preventDefault(): void {
+    (this.nativeEvent as { preventDefault?: () => void })?.preventDefault?.();
+  }
+
+  /** Whether {@link stopPropagation} has been called. */
+  get propagationStopped(): boolean {
+    return this.stopped;
+  }
+
+  /** Whether {@link stopImmediatePropagation} has been called. */
+  get immediatePropagationStopped(): boolean {
+    return this.stoppedImmediate;
+  }
+
+  /** Whether the native event's default action was prevented. */
+  get defaultPrevented(): boolean {
+    return !!(this.nativeEvent as { defaultPrevented?: boolean })?.defaultPrevented;
+  }
+
+  /** Native horizontal wheel delta, if this wraps a `WheelEvent`. */
+  get deltaX(): number | undefined {
+    return (this.nativeEvent as { deltaX?: number })?.deltaX;
+  }
+
+  /** Native vertical wheel delta, if this wraps a `WheelEvent`. */
+  get deltaY(): number | undefined {
+    return (this.nativeEvent as { deltaY?: number })?.deltaY;
+  }
+
+  /** Native pointer X, if this wraps a pointer/mouse event. */
+  get clientX(): number | undefined {
+    return (this.nativeEvent as { clientX?: number })?.clientX;
+  }
+
+  /** Native pointer Y, if this wraps a pointer/mouse event. */
+  get clientY(): number | undefined {
+    return (this.nativeEvent as { clientY?: number })?.clientY;
+  }
+
+  /** Native key, if this wraps a keyboard event. */
+  get key(): string | undefined {
+    return (this.nativeEvent as { key?: string })?.key;
+  }
+}
+
 /**
  * Base class for every node in the Virtual Math Tree (VMT).
  *
@@ -152,6 +247,8 @@ export abstract class Entity {
   public clipChildren: boolean = false;
 
   protected listeners: Map<VectoEvent, Array<(e: any) => void>> = new Map();
+  /** Capture-phase listeners (fired root→target before bubble). */
+  protected captureListeners: Map<VectoEvent, Array<(e: any) => void>> = new Map();
   private animations: Array<any> = [];
 
   constructor(id?: string) {
@@ -259,16 +356,22 @@ export abstract class Entity {
   /**
    * Register a listener for a {@link VectoEvent}.
    *
+   * Listeners run in the bubble phase by default; pass `{ capture: true }` for the
+   * capture phase (root→target). Bubble listeners also fire for the legacy
+   * {@link emit} (direct, self-only) path.
+   *
    * @param event - The event name to listen for.
-   * @param callback - Handler invoked when the event is emitted.
+   * @param callback - Handler invoked when the event fires.
+   * @param options - `{ capture }` to register for the capture phase.
    * @returns `this` for method chaining.
    * @example entity.on('click', (e) => console.log('clicked', e));
    */
-  public on(event: VectoEvent, callback: (e: any) => void): this {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
+  public on(event: VectoEvent, callback: (e: any) => void, options?: ListenerOptions): this {
+    const map = options?.capture ? this.captureListeners : this.listeners;
+    if (!map.has(event)) {
+      map.set(event, []);
     }
-    this.listeners.get(event)!.push(callback);
+    map.get(event)!.push(callback);
     return this;
   }
 
@@ -277,10 +380,11 @@ export abstract class Entity {
    *
    * @param event - The event name to stop listening to.
    * @param callback - The exact handler reference passed to {@link on}.
+   * @param options - Must match the phase the listener was registered with.
    * @returns `this` for method chaining.
    */
-  public off(event: VectoEvent, callback: (e: any) => void): this {
-    const handlers = this.listeners.get(event);
+  public off(event: VectoEvent, callback: (e: any) => void, options?: ListenerOptions): this {
+    const handlers = (options?.capture ? this.captureListeners : this.listeners).get(event);
     if (handlers) {
       const idx = handlers.indexOf(callback);
       if (idx !== -1) handlers.splice(idx, 1);
@@ -295,13 +399,17 @@ export abstract class Entity {
   public destroy(): void {
     this.animations = [];
     this.listeners.clear();
+    this.captureListeners.clear();
     if (this.parent) {
       this.parent.remove(this);
     }
   }
 
   /**
-   * Dispatch a {@link VectoEvent} to all registered listeners on this entity.
+   * Dispatch a {@link VectoEvent} directly to this entity's bubble-phase listeners
+   * only — no tree propagation. Kept for component-internal/self events (e.g. a
+   * form control emitting its own `change`); use {@link dispatchEvent} for the
+   * capture/bubble path.
    *
    * @param event - The event name to dispatch.
    * @param payload - Arbitrary data forwarded to each listener.
@@ -310,6 +418,49 @@ export abstract class Entity {
     const handlers = this.listeners.get(event);
     if (handlers) {
       handlers.forEach((h) => h(payload));
+    }
+  }
+
+  /** Run one node's listeners for the event, honoring stopImmediatePropagation. */
+  private fireListeners(
+    node: Entity,
+    map: Map<VectoEvent, Array<(e: any) => void>>,
+    event: VectoUIEvent,
+  ): void {
+    const handlers = map.get(event.type);
+    if (!handlers) return;
+    event.currentTarget = node;
+    // Snapshot so a handler that adds/removes listeners doesn't disturb this pass.
+    for (const h of handlers.slice()) {
+      h(event);
+      if (event.immediatePropagationStopped) return;
+    }
+  }
+
+  /**
+   * Dispatch a {@link VectoUIEvent} through the entity tree, DOM-style: a capture
+   * phase from the root down to `event.target`, then a bubble phase back up to the
+   * root. `event.stopPropagation()` halts the walk; `stopImmediatePropagation()`
+   * also skips the remaining listeners on the current node. A non-bubbling event
+   * only fires its target in the bubble phase (capture still runs).
+   *
+   * @param event - The event to propagate (its `target` defines the path).
+   */
+  public dispatchEvent(event: VectoUIEvent): void {
+    // Build the path target → root.
+    const path: Entity[] = [];
+    for (let n: Entity | null = event.target; n; n = n.parent) path.push(n);
+
+    // Capture: root → target.
+    for (let i = path.length - 1; i >= 0; i--) {
+      if (event.propagationStopped) return;
+      this.fireListeners(path[i], path[i].captureListeners, event);
+    }
+    // Bubble: target → root.
+    for (let i = 0; i < path.length; i++) {
+      if (event.propagationStopped) return;
+      this.fireListeners(path[i], path[i].listeners, event);
+      if (!event.bubbles) return; // non-bubbling: only the target gets the bubble phase
     }
   }
 
