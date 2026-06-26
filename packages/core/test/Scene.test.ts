@@ -239,6 +239,62 @@ describe('Scene', () => {
     (scene as any).syncA11y((scene as any).root);
     expect(((scene as any).a11yElements.get('plain') as HTMLElement).tagName).toBe('DIV');
   });
+
+  it('syncA11y adds tabindex and keydown listener for interactive roles on non-native elements', () => {
+    const parentDiv = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    parentDiv.appendChild(canvas);
+    const scene = new Scene(canvas);
+
+    class SwitchLike extends Entity {
+      isPointInside() {
+        return false;
+      }
+      render() {}
+      getA11yAttributes() {
+        return { tag: 'div' as const, role: 'switch', label: 'Toggle' };
+      }
+    }
+    const s = new SwitchLike('sw');
+    s.interactive = true;
+    s.width = 40;
+    s.height = 20;
+    scene.add(s);
+
+    class GroupLike extends Entity {
+      isPointInside() {
+        return false;
+      }
+      render() {}
+      getA11yAttributes() {
+        return { tag: 'div' as const, role: 'group' };
+      }
+    }
+    const g = new GroupLike('grp');
+    g.interactive = true;
+    g.width = 100;
+    g.height = 100;
+    scene.add(g);
+
+    (scene as any).syncA11y((scene as any).root);
+
+    const swEl = (scene as any).a11yElements.get('sw') as HTMLElement;
+    expect(swEl.getAttribute('tabindex')).toBe('0');
+
+    let clicked = false;
+    s.on('click', () => (clicked = true));
+
+    // Simulate Enter keydown
+    const event = new KeyboardEvent('keydown', { key: 'Enter' });
+    Object.defineProperty(event, 'preventDefault', { value: vi.fn() });
+    swEl.dispatchEvent(event);
+
+    expect(event.preventDefault).toHaveBeenCalled();
+    expect(clicked).toBe(true);
+
+    const grpEl = (scene as any).a11yElements.get('grp') as HTMLElement;
+    expect(grpEl.hasAttribute('tabindex')).toBe(false);
+  });
 });
 
 describe('Scene render loop: culling, onDemand, a11y early-out', () => {
