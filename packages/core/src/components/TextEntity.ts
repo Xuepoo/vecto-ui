@@ -1,5 +1,5 @@
 import { Entity } from '../tree/Entity';
-import { LayoutEngine, type GlyphMeasurer } from '../layout/LayoutEngine';
+import { LayoutEngine, type GlyphMeasurer, type PreparedText } from '../layout/LayoutEngine';
 import { createCanvasMeasurer } from '../layout/measure';
 import { IRenderer } from '../renderer/IRenderer';
 
@@ -16,6 +16,7 @@ export class TextEntity extends Entity {
   public text: string;
   private atlas: any;
   private layout: LayoutEngine;
+  private prepared: PreparedText;
   private nodes: any[] = [];
   public fontSize: number;
 
@@ -32,7 +33,8 @@ export class TextEntity extends Entity {
     this.atlas = atlas;
     this.fontSize = fontSize;
     this.layout = new LayoutEngine(maxWidth, 10000, defaultMeasurer());
-    this.updateLayout();
+    this.prepared = this.layout.prepare(this.text, this.atlas, this.fontSize);
+    this.applyLayout();
 
     // Enable Agent Accessibility Semantic Layer
     this.interactive = true;
@@ -41,8 +43,35 @@ export class TextEntity extends Entity {
     this.on('pointerleave', () => (this.isHovered = false));
   }
 
-  private updateLayout() {
-    const result = this.layout.layoutText(this.text, this.atlas, this.fontSize);
+  /**
+   * Replace the text content. Runs the **cold** measurement pass (re-segment +
+   * re-measure) since the glyphs changed, then re-lays out.
+   *
+   * @returns `this` for chaining.
+   */
+  public setText(text: string): this {
+    this.text = text;
+    this.prepared = this.layout.prepare(this.text, this.atlas, this.fontSize);
+    this.applyLayout();
+    return this;
+  }
+
+  /**
+   * Change the wrap width and reflow. Cheap **hot** path only — reuses the
+   * cached {@link PreparedText}, doing no re-segmentation or re-measurement.
+   * Ideal for responsive resize.
+   *
+   * @returns `this` for chaining.
+   */
+  public setMaxWidth(maxWidth: number): this {
+    this.layout.maxWidth = maxWidth;
+    this.applyLayout();
+    return this;
+  }
+
+  /** Hot pass: place the cached {@link PreparedText} and refresh the a11y box. */
+  private applyLayout() {
+    const result = this.layout.layoutPrepared(this.prepared);
     this.nodes = result.nodes;
 
     // Feed bounding box to A11y Layer
