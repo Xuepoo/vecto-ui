@@ -16,6 +16,8 @@ const mockCtx = {
   closePath: vi.fn(),
   arc: vi.fn(),
   roundRect: vi.fn(),
+  rect: vi.fn(),
+  clip: vi.fn(),
   drawImage: vi.fn(),
   fill: vi.fn(),
   stroke: vi.fn(),
@@ -74,6 +76,17 @@ describe('CanvasRenderer', () => {
     const renderer = new CanvasRenderer(mockCanvas as any);
     renderer.clear();
     expect(mockCtx.clearRect).toHaveBeenCalledWith(0, 0, 1024, 768);
+  });
+
+  it('clip() restricts drawing to a rectangle', () => {
+    mockCtx.rect.mockClear();
+    mockCtx.clip.mockClear();
+    mockCtx.beginPath.mockClear();
+    const renderer = new CanvasRenderer(mockCanvas as any);
+    renderer.clip(10, 20, 100, 40);
+    expect(mockCtx.beginPath).toHaveBeenCalled();
+    expect(mockCtx.rect).toHaveBeenCalledWith(10, 20, 100, 40);
+    expect(mockCtx.clip).toHaveBeenCalled();
   });
 
   it('drawing path methods delegate to context', () => {

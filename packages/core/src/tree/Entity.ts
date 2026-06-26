@@ -89,8 +89,12 @@ export type VectoEvent =
   | 'pointermove'
   | 'pointerleave'
   // Emitted from a form-control shadow node (`<input>`) when its value/checked
-  // changes; payload `{ value, checked }`.
-  | 'change';
+  // changes; payload `{ value, checked, selectionStart, selectionEnd, composition }`
+  // where `composition` is `{ start, length } | null` for the active IME pre-edit.
+  | 'change'
+  // Emitted when the shadow `<input>` gains/loses focus (caret blink, etc.).
+  | 'focus'
+  | 'blur';
 
 /**
  * Base class for every node in the Virtual Math Tree (VMT).

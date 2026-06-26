@@ -336,3 +336,85 @@ describe('Scene render loop: culling, onDemand, a11y early-out', () => {
     expect(e.renders).toBe(2); // still rendering due to pending animation
   });
 });
+
+describe('Scene syncA11y — text input IME / selection / focus forwarding', () => {
+  class InputLike extends Entity {
+    isPointInside() {
+      return false;
+    }
+    render() {}
+    getA11yAttributes() {
+      return { tag: 'input' as const, inputType: 'text', value: 'abc', label: 'Name' };
+    }
+  }
+
+  function setup() {
+    const parentDiv = document.createElement('div');
+    const canvas = document.createElement('canvas');
+    parentDiv.appendChild(canvas);
+    const scene = new Scene(canvas);
+    const e = new InputLike('inp');
+    e.interactive = true;
+    e.width = 100;
+    e.height = 30;
+    scene.add(e);
+    (scene as any).syncA11y((scene as any).root);
+    const el = (scene as any).a11yElements.get('inp') as HTMLInputElement;
+    return { scene, e, el };
+  }
+
+  it('change payload carries selectionStart/selectionEnd', () => {
+    const { e, el } = setup();
+    const events: any[] = [];
+    e.on('change', (p) => events.push(p));
+
+    el.value = 'hello';
+    el.setSelectionRange(2, 4);
+    el.dispatchEvent(new Event('input'));
+
+    expect(events.at(-1)).toMatchObject({ value: 'hello', selectionStart: 2, selectionEnd: 4 });
+  });
+
+  it('arrow-key/click caret moves are forwarded via selection', () => {
+    const { e, el } = setup();
+    const events: any[] = [];
+    e.on('change', (p) => events.push(p));
+
+    el.value = 'hello';
+    el.setSelectionRange(3, 3);
+    el.dispatchEvent(new Event('keyup'));
+    expect(events.at(-1)).toMatchObject({ selectionStart: 3, selectionEnd: 3 });
+  });
+
+  it('composition lifecycle sets then clears the composition range', () => {
+    const { e, el } = setup();
+    const events: any[] = [];
+    e.on('change', (p) => events.push(p));
+
+    el.value = '';
+    el.setSelectionRange(0, 0);
+    el.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+
+    el.value = '你好';
+    el.setSelectionRange(2, 2);
+    el.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你好' }));
+    expect(events.at(-1).composition).toEqual({ start: 0, length: 2 });
+
+    el.dispatchEvent(new CompositionEvent('compositionend', { data: '你好' }));
+    expect(events.at(-1).composition).toBeNull();
+  });
+
+  it('focus and blur emit on the entity', () => {
+    const { e, el } = setup();
+    let focused = 0;
+    let blurred = 0;
+    e.on('focus', () => focused++);
+    e.on('blur', () => blurred++);
+
+    el.dispatchEvent(new Event('focus'));
+    el.dispatchEvent(new Event('blur'));
+
+    expect(focused).toBe(1);
+    expect(blurred).toBe(1);
+  });
+});
