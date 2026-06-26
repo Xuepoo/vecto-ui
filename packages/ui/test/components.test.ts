@@ -48,6 +48,7 @@ function recorder(): { ops: string[]; r: IRenderer } {
     fillText: rec('fillText'),
     fillCircle: rec('fillCircle'),
     flush: rec('flush'),
+    clip: rec('clip'),
     createLinearGradient: vi.fn(() => ({})),
   } as unknown as IRenderer;
   return { ops, r };
@@ -217,6 +218,106 @@ describe('Input', () => {
     const r1 = recorder();
     filled.render(r1.r);
     expect(r1.ops).toContain('fillText');
+  });
+
+  it('change event carries selection + composition into the component', () => {
+    const input = new Input({ width: 200 });
+    input.emit('change', {
+      value: 'hello',
+      checked: false,
+      selectionStart: 1,
+      selectionEnd: 3,
+      composition: { start: 0, length: 2 },
+    });
+    expect(input.value).toBe('hello');
+    expect(input.selectionStart).toBe(1);
+    expect(input.selectionEnd).toBe(3);
+    expect(input.composition).toEqual({ start: 0, length: 2 });
+  });
+
+  it('charOffset maps a char index to its measured x', () => {
+    const input = new Input({ width: 200 }); // default 16px font → 8px/char in jsdom
+    input.emit('change', { value: 'abcd', selectionStart: 4, selectionEnd: 4, composition: null });
+    expect((input as any).charOffset(2)).toBe(16); // measureText('ab') = 2 * 16 * 0.5
+  });
+
+  it('draws a blinking caret only when focused', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(0); // caret ON phase
+    const input = new Input({ width: 200 });
+    input.emit('change', { value: 'ab', selectionStart: 2, selectionEnd: 2, composition: null });
+
+    const blurred = recorder();
+    input.render(blurred.r);
+    const strokesBlurred = blurred.ops.filter((o) => o === 'stroke').length;
+
+    input.emit('focus', {});
+    const focused = recorder();
+    input.render(focused.r);
+    const strokesFocused = focused.ops.filter((o) => o === 'stroke').length;
+
+    expect(strokesFocused).toBe(strokesBlurred + 1); // +caret line
+    (Date.now as any).mockRestore();
+  });
+
+  it('hides the caret on the blink-off phase', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(500); // caret OFF phase
+    const input = new Input({ width: 200 });
+    input.emit('focus', {});
+    input.emit('change', { value: 'ab', selectionStart: 2, selectionEnd: 2, composition: null });
+    const r = recorder();
+    input.render(r.r);
+    expect(r.ops.filter((o) => o === 'stroke').length).toBe(1); // border only, no caret
+    (Date.now as any).mockRestore();
+  });
+
+  it('draws a selection highlight when a range is selected', () => {
+    const input = new Input({ width: 200 });
+
+    input.emit('change', { value: 'abcd', selectionStart: 4, selectionEnd: 4, composition: null });
+    const noSel = recorder();
+    input.render(noSel.r);
+    const fillsNoSel = noSel.ops.filter((o) => o === 'fill').length;
+
+    input.emit('change', { value: 'abcd', selectionStart: 1, selectionEnd: 3, composition: null });
+    const sel = recorder();
+    input.render(sel.r);
+    const fillsSel = sel.ops.filter((o) => o === 'fill').length;
+
+    expect(fillsSel).toBe(fillsNoSel + 1); // +selection rect
+  });
+
+  it('underlines the composing segment during IME', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(500); // caret OFF, isolate the underline stroke
+    const input = new Input({ width: 200 });
+    input.emit('focus', {});
+
+    input.emit('change', { value: '你好', selectionStart: 2, selectionEnd: 2, composition: null });
+    const noComp = recorder();
+    input.render(noComp.r);
+    const strokesNoComp = noComp.ops.filter((o) => o === 'stroke').length;
+
+    input.emit('change', {
+      value: '你好',
+      selectionStart: 2,
+      selectionEnd: 2,
+      composition: { start: 0, length: 2 },
+    });
+    const comp = recorder();
+    input.render(comp.r);
+    const strokesComp = comp.ops.filter((o) => o === 'stroke').length;
+
+    expect(strokesComp).toBe(strokesNoComp + 1); // +composition underline
+    (Date.now as any).mockRestore();
+  });
+
+  it('scrolls so the caret stays within the box for long text', () => {
+    const input = new Input({ width: 100, padding: 10 }); // inner width = 80
+    const long = 'a'.repeat(50); // charOffset(50) = 50 * 8 = 400 ≫ 80
+    input.emit('change', { value: long, selectionStart: 50, selectionEnd: 50, composition: null });
+    input.render(recorder().r); // computes scrollLeft
+    const cx = (input as any).caretScreenX();
+    expect(cx).toBeLessThanOrEqual(100 - 10 + 0.5); // pinned to right inner edge
+    expect(cx).toBeGreaterThan(0);
   });
 });
 

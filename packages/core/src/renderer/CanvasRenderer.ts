@@ -111,6 +111,14 @@ export class CanvasRenderer implements IRenderer {
   }
 
   /** @inheritdoc */
+  clip(x: number, y: number, width: number, height: number): void {
+    this.flush();
+    this.ctx.beginPath();
+    this.ctx.rect(x, y, width, height);
+    this.ctx.clip();
+  }
+
+  /** @inheritdoc */
   beginPath(): void {
     this.flush();
     this.ctx.beginPath();
