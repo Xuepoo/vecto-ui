@@ -1,4 +1,4 @@
-import { Entity, IRenderer, type Bounds } from '@vecto-ui/core';
+import { Entity, IRenderer } from '@vecto-ui/core';
 import { marked, type Token, type Tokens } from 'marked';
 import { Stack } from './Stack';
 import { Text } from './Text';
@@ -103,6 +103,14 @@ class QuoteBorder extends Entity {
     r.roundRect(0, 0, this.width, this.height, 2);
     r.fill(this.color);
   }
+}
+
+/** A plain structural container for grouping entities without applying layout rules. */
+class Container extends UIComponent {
+  constructor(name?: string) {
+    super(name);
+  }
+  render(_r: IRenderer): void {}
 }
 
 // ── Code block with syntax-keyword highlighting ─────────────────────────────
@@ -471,39 +479,50 @@ export class Markdown extends UIComponent {
         const codeFont = `14px ${t.codeFont}`;
         const lines = codeToken.text.split('\n');
 
-        // Container for code block
-        const codeContainer = new Stack({ direction: 'vertical', gap: 0 });
-
-        // Background rect (will be sized after lines are measured)
-        const bgHeight = lines.length * lineH + pad * 2;
-        const bg = new RoundedRect(this.maxWidth, bgHeight, t.codeBgColor, 8);
-        codeContainer.add(bg);
+        // Container for code block (plain Container, no automatic layout)
+        const codeContainer = new Container('CodeContainer');
 
         // Render each line with syntax highlighting
         const linesContainer = new Stack({ direction: 'vertical', gap: 0 });
-        linesContainer.x = pad;
-        linesContainer.y = pad;
 
         for (const line of lines) {
-          const segments = highlightLine(line || ' ', lang, t);
-          // For simplicity, join all segments into one Text with keyword color
-          // A full implementation would use inline HBox with per-segment Text
-          const lineText = segments.map((s) => s.text).join('');
-          const primaryColor = segments.length > 0 ? segments[0].color : t.codeColor;
-          const textEnt = new Text(lineText || ' ', {
-            font: codeFont,
-            color: primaryColor,
-            maxWidth: this.maxWidth - pad * 2,
-          });
-          textEnt.height = lineH;
-          linesContainer.add(textEnt);
+          const segments = highlightLine(line, lang, t);
+          const lineRow = new Stack({ direction: 'horizontal', gap: 0 });
+          if (!line.trim()) {
+            lineRow.add(
+              new Text(line || ' ', {
+                font: codeFont,
+                color: t.codeColor,
+                preserveLeadingSpaces: true,
+              }),
+            );
+          } else {
+            for (const seg of segments) {
+              lineRow.add(
+                new Text(seg.text, {
+                  font: codeFont,
+                  color: seg.color,
+                  preserveLeadingSpaces: true,
+                }),
+              );
+            }
+          }
+          lineRow.height = lineH;
+          linesContainer.add(lineRow);
         }
 
-        // Overlay lines on top of background
-        bg.height = linesContainer.height + pad * 2;
-        codeContainer.height = bg.height;
-        codeContainer.width = this.maxWidth;
+        const bgHeight = linesContainer.height + pad * 2;
+        const bg = new RoundedRect(this.maxWidth, bgHeight, t.codeBgColor, 8);
+        bg.x = 0;
+        bg.y = 0;
+        codeContainer.add(bg);
+
+        linesContainer.x = pad;
+        linesContainer.y = pad;
         codeContainer.add(linesContainer);
+
+        codeContainer.width = this.maxWidth;
+        codeContainer.height = bgHeight;
 
         return codeContainer;
       }
