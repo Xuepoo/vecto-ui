@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
 import { TextEntity } from '../src/components/TextEntity';
+import { LayoutEngine } from '../src/layout/LayoutEngine';
 
 // jsdom doesn't implement canvas getContext; stub it so the shared font
 // measurer takes its portable null-fallback without logging "Not implemented".
@@ -113,5 +114,40 @@ describe('TextEntity', () => {
 
     textEntity.emit('pointerleave', {});
     expect((textEntity as any).isHovered).toBe(false);
+  });
+
+  it('setMaxWidth reflows via the hot path only; setText re-prepares (cold/hot)', () => {
+    const prepSpy = vi.spyOn(LayoutEngine.prototype, 'prepare');
+    const hotSpy = vi.spyOn(LayoutEngine.prototype, 'layoutPrepared');
+
+    const t = new TextEntity('hello world foo bar', {}, 1000, 24);
+    const prepAfterCtor = prepSpy.mock.calls.length; // cold pass ran in ctor
+    const hotAfterCtor = hotSpy.mock.calls.length;
+    expect(prepAfterCtor).toBeGreaterThan(0);
+
+    t.setMaxWidth(40); // resize → hot only, reuse the cached PreparedText
+    expect(prepSpy.mock.calls.length).toBe(prepAfterCtor); // no re-prepare
+    expect(hotSpy.mock.calls.length).toBe(hotAfterCtor + 1);
+
+    t.setText('changed text'); // content change → must re-prepare
+    expect(prepSpy.mock.calls.length).toBe(prepAfterCtor + 1);
+
+    prepSpy.mockRestore();
+    hotSpy.mockRestore();
+  });
+
+  it('setMaxWidth re-wraps the cached text (taller when narrower)', () => {
+    const t = new TextEntity('aaaa bbbb cccc', {}, 1000, 24); // wide → one line
+    const tallBefore = t.height;
+    t.setMaxWidth(30); // narrow → wraps → taller
+    expect(t.height).toBeGreaterThan(tallBefore);
+  });
+
+  it('setText updates text and box, returns this for chaining', () => {
+    const t = new TextEntity('A', mockAtlas, 200, 24);
+    const ret = t.setText('AA');
+    expect(ret).toBe(t);
+    expect(t.text).toBe('AA');
+    expect(t.width).toBe(48); // two 'A' glyphs at 24 each
   });
 });

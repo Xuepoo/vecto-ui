@@ -44,6 +44,41 @@ export interface LayoutResult {
   totalHeight: number;
 }
 
+/** A single measured grapheme (the "cold" half of the cold/hot split). */
+export interface PreparedGlyph {
+  char: string;
+  /** Advance width at the prepared `fontSize`. */
+  width: number;
+}
+
+/** A measured word/segment, ready to be placed without re-measuring. */
+export interface PreparedWord {
+  glyphs: PreparedGlyph[];
+  /** Sum of glyph advances — used for word-level wrap decisions. */
+  width: number;
+  isWordLike: boolean | undefined;
+  /** Pre-computed `word.trim().length === 0`. */
+  isWhitespace: boolean;
+}
+
+/** A measured paragraph; `isEmpty` marks a blank line (forced newline). */
+export interface PreparedParagraph {
+  words: PreparedWord[];
+  isEmpty: boolean;
+}
+
+/**
+ * The result of the **cold** measurement pass ({@link LayoutEngine.prepare}):
+ * segmented + measured text that is independent of layout constraints
+ * (`maxWidth`/`maxHeight`/exclusion masks). Reuse it across cheap **hot**
+ * re-layouts ({@link LayoutEngine.layoutPrepared}) on resize / reposition,
+ * avoiding the per-frame `Intl.Segmenter` + measurement cost.
+ */
+export interface PreparedText {
+  paragraphs: PreparedParagraph[];
+  fontSize: number;
+}
+
 /**
  * VectoUI Global Layout Engine (Intl.Segmenter)
  * Advanced Typography Engine supporting CJK, Emoji, and Western Graphemes
@@ -130,65 +165,102 @@ export class LayoutEngine {
     fontSize: number = 32,
     exclusionMask?: (x: number, y: number, w: number, h: number) => boolean,
   ): LayoutResult {
+    return this.layoutPrepared(this.prepare(text, fontAtlas, fontSize), exclusionMask);
+  }
+
+  /**
+   * **Cold pass.** Segment and measure `text` once into a reusable
+   * {@link PreparedText}. Runs `Intl.Segmenter` (word + grapheme) and resolves
+   * each grapheme's advance width — the expensive work. The result is
+   * independent of `maxWidth`/`maxHeight`/exclusion masks, so it can be re-laid
+   * out cheaply by {@link layoutPrepared} on resize / reposition / animation.
+   *
+   * @param text - The raw text string (newlines force paragraph breaks).
+   * @param fontAtlas - Pre-measured glyph metrics keyed by grapheme character.
+   * @param fontSize - Target font size in pixels (default: `32`).
+   */
+  public prepare(text: string, fontAtlas: GlyphAtlas, fontSize: number = 32): PreparedText {
+    const paragraphs: PreparedParagraph[] = [];
+
+    for (const paragraph of text.split('\n')) {
+      if (paragraph.length === 0) {
+        paragraphs.push({ words: [], isEmpty: true });
+        continue;
+      }
+
+      const words: PreparedWord[] = [];
+      for (const segment of this.getWordSegments(paragraph)) {
+        const word = segment.segment;
+        const glyphs: PreparedGlyph[] = [];
+        let width = 0;
+        for (const char of this.getGraphemes(word)) {
+          const w = this.glyphWidth(char, fontAtlas, fontSize);
+          glyphs.push({ char, width: w });
+          width += w;
+        }
+        words.push({
+          glyphs,
+          width,
+          isWordLike: segment.isWordLike,
+          isWhitespace: word.trim().length === 0,
+        });
+      }
+      paragraphs.push({ words, isEmpty: false });
+    }
+
+    return { paragraphs, fontSize };
+  }
+
+  /**
+   * **Hot pass.** Place an already-measured {@link PreparedText} into positioned
+   * glyphs. Does only wrap/positioning arithmetic — no `Intl.Segmenter`, no
+   * re-measurement — so it is cheap enough to call every frame or on every
+   * resize. Reads the engine's current `maxWidth`/`maxHeight`, so changing those
+   * and re-calling reflows the same prepared text.
+   *
+   * @param prepared - Output of {@link prepare}.
+   * @param exclusionMask - Optional collision callback (see {@link layoutText}).
+   */
+  public layoutPrepared(
+    prepared: PreparedText,
+    exclusionMask?: (x: number, y: number, w: number, h: number) => boolean,
+  ): LayoutResult {
     const layoutNodes: LayoutNode[] = [];
+    const fontSize = prepared.fontSize;
+    const lineHeight = fontSize * 1.5;
     let currentX = 0;
     let currentY = 0;
     let maxLineWidth = 0;
-    const lineHeight = fontSize * 1.5;
 
-    // Hard split by forced newlines first
-    const paragraphs = text.split('\n');
-
-    for (const paragraph of paragraphs) {
-      if (paragraph.length === 0) {
+    for (const paragraph of prepared.paragraphs) {
+      if (paragraph.isEmpty) {
         currentY += lineHeight;
         currentX = 0;
         continue;
       }
 
-      const segments = this.getWordSegments(paragraph);
-
-      for (const segment of segments) {
-        const word = segment.segment;
-
-        let wordWidth = 0;
-        const graphemes = this.getGraphemes(word);
-
-        // 1. Measure the entire word first
-        for (const char of graphemes) {
-          wordWidth += this.glyphWidth(char, fontAtlas, fontSize);
-        }
-
-        // 2. Line wrap logic
-        if (currentX + wordWidth > this.maxWidth && currentX > 0) {
-          // If it's pure whitespace, don't trigger a hard wrap, let it trail
-          if (segment.isWordLike === false && word.trim().length === 0) {
-            continue;
-          }
+      for (const word of paragraph.words) {
+        // Word-level wrap
+        if (currentX + word.width > this.maxWidth && currentX > 0) {
+          if (word.isWordLike === false && word.isWhitespace) continue;
           currentX = 0;
           currentY += lineHeight;
         }
 
-        // 3. Layout characters
-        for (const char of graphemes) {
-          const charWidth = this.glyphWidth(char, fontAtlas, fontSize);
+        for (const glyph of word.glyphs) {
+          const charWidth = glyph.width;
 
-          // Dynamically find the next available spot that doesn't collide with the mask
           let foundSpot = false;
           while (currentY < this.maxHeight) {
-            // Line wrap
             if (currentX + charWidth > this.maxWidth && currentX > 0) {
               currentX = 0;
               currentY += lineHeight;
               continue;
             }
-
-            // Check Exclusion Mask (Physics/Video collision)
             if (exclusionMask && exclusionMask(currentX, currentY, charWidth, fontSize)) {
-              currentX += charWidth; // Skip over the masked shape
+              currentX += charWidth;
               continue;
             }
-
             foundSpot = true;
             break;
           }
@@ -196,12 +268,10 @@ export class LayoutEngine {
           if (!foundSpot || currentY >= this.maxHeight) break; // Out of bounds
 
           // Don't render invisible leading characters at the START of a new line
-          if (currentX === 0 && char.trim().length === 0) {
-            continue;
-          }
+          if (currentX === 0 && glyph.char.trim().length === 0) continue;
 
           layoutNodes.push({
-            char: char,
+            char: glyph.char,
             x: currentX,
             y: currentY,
             width: charWidth,
@@ -213,16 +283,11 @@ export class LayoutEngine {
         }
       }
 
-      // End of paragraph
       currentX = 0;
       currentY += lineHeight;
     }
 
-    return {
-      nodes: layoutNodes,
-      totalWidth: maxLineWidth,
-      totalHeight: currentY,
-    };
+    return { nodes: layoutNodes, totalWidth: maxLineWidth, totalHeight: currentY };
   }
 
   /**
@@ -243,44 +308,44 @@ export class LayoutEngine {
     buffer: LayoutResultBuffer,
     exclusionMask?: (x: number, y: number, w: number, h: number) => boolean,
   ): void {
+    this.layoutPreparedIntoBuffer(this.prepare(text, fontAtlas, fontSize), buffer, exclusionMask);
+  }
+
+  /**
+   * **Hot pass, zero-GC variant.** Place an already-measured {@link PreparedText}
+   * directly into a pre-allocated {@link LayoutResultBuffer}. Like
+   * {@link layoutPrepared} but writes flat typed arrays instead of allocating
+   * {@link LayoutNode} objects — the per-frame path for large dynamic scenes.
+   */
+  public layoutPreparedIntoBuffer(
+    prepared: PreparedText,
+    buffer: LayoutResultBuffer,
+    exclusionMask?: (x: number, y: number, w: number, h: number) => boolean,
+  ): void {
     buffer.reset();
+    const fontSize = prepared.fontSize;
+    const lineHeight = fontSize * 1.5;
     let currentX = 0;
     let currentY = 0;
-    const lineHeight = fontSize * 1.5;
 
-    const paragraphs = text.split('\n');
-
-    for (const paragraph of paragraphs) {
-      if (paragraph.length === 0) {
+    for (const paragraph of prepared.paragraphs) {
+      if (paragraph.isEmpty) {
         currentY += lineHeight;
         currentX = 0;
         continue;
       }
 
-      const segments = this.getWordSegments(paragraph);
-
-      for (const segment of segments) {
-        const word = segment.segment;
-
-        let wordWidth = 0;
-        const graphemes = this.getGraphemes(word);
-
-        for (const char of graphemes) {
-          wordWidth += this.glyphWidth(char, fontAtlas, fontSize);
-        }
-
-        if (currentX + wordWidth > this.maxWidth && currentX > 0) {
-          if (segment.isWordLike === false && word.trim().length === 0) {
-            continue;
-          }
+      for (const word of paragraph.words) {
+        if (currentX + word.width > this.maxWidth && currentX > 0) {
+          if (word.isWordLike === false && word.isWhitespace) continue;
           currentX = 0;
           currentY += lineHeight;
         }
 
-        for (const char of graphemes) {
+        for (const glyph of word.glyphs) {
           if (buffer.count >= LayoutResultBuffer.CAPACITY) break;
 
-          const charWidth = this.glyphWidth(char, fontAtlas, fontSize);
+          const charWidth = glyph.width;
 
           let foundSpot = false;
           while (currentY < this.maxHeight) {
@@ -289,24 +354,20 @@ export class LayoutEngine {
               currentY += lineHeight;
               continue;
             }
-
             if (exclusionMask && exclusionMask(currentX, currentY, charWidth, fontSize)) {
               currentX += charWidth;
               continue;
             }
-
             foundSpot = true;
             break;
           }
 
           if (!foundSpot || currentY >= this.maxHeight) break;
 
-          if (currentX === 0 && char.trim().length === 0) {
-            continue;
-          }
+          if (currentX === 0 && glyph.char.trim().length === 0) continue;
 
           const idx = buffer.count;
-          buffer.chars[idx] = char;
+          buffer.chars[idx] = glyph.char;
           buffer.xs[idx] = currentX;
           buffer.ys[idx] = currentY;
           buffer.ws[idx] = charWidth;

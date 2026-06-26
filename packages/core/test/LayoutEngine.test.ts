@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   LayoutEngine,
   GlyphAtlas,
@@ -158,5 +158,93 @@ describe('LayoutEngine — real font metrics via measurer', () => {
     engine.layoutTextIntoBuffer('AB', {}, 10, buffer);
     expect(buffer.ws[0]).toBeCloseTo(8);
     expect(buffer.xs[1]).toBeCloseTo(8);
+  });
+});
+
+describe('LayoutEngine — cold/hot split (prepare / layoutPrepared)', () => {
+  const atlas: GlyphAtlas = {
+    A: { width: 20, baseSize: 32, ast: null },
+    B: { width: 20, baseSize: 32, ast: null },
+    C: { width: 20, baseSize: 32, ast: null },
+    ' ': { width: 10, baseSize: 32, ast: null },
+  };
+
+  it('layoutPrepared matches layoutText exactly (wrapping)', () => {
+    const engine = new LayoutEngine(50, 100);
+    const direct = engine.layoutText('A B C', atlas, 32);
+    const viaPrepared = engine.layoutPrepared(engine.prepare('A B C', atlas, 32));
+    expect(viaPrepared).toEqual(direct);
+  });
+
+  it('layoutPrepared matches layoutText for newlines and CJK', () => {
+    const engine = new LayoutEngine(100, 200);
+    expect(engine.layoutPrepared(engine.prepare('A\nB', atlas, 32))).toEqual(
+      engine.layoutText('A\nB', atlas, 32),
+    );
+    const cjk: GlyphAtlas = {
+      你: { width: 32, baseSize: 32, ast: null },
+      好: { width: 32, baseSize: 32, ast: null },
+    };
+    expect(engine.layoutPrepared(engine.prepare('你好', cjk, 32))).toEqual(
+      engine.layoutText('你好', cjk, 32),
+    );
+  });
+
+  it('the hot path does NOT re-segment or re-measure', () => {
+    let measureCalls = 0;
+    const counting: GlyphMeasurer = {
+      measure: (_c, fs) => {
+        measureCalls++;
+        return fs * 0.5;
+      },
+    };
+    const engine = new LayoutEngine(1000, 1000, counting);
+    const segSpy = vi.spyOn(Intl.Segmenter.prototype, 'segment');
+
+    const prepared = engine.prepare('hello world', {}, 10);
+    const measuredInPrepare = measureCalls;
+    const segInPrepare = segSpy.mock.calls.length;
+    expect(measuredInPrepare).toBeGreaterThan(0); // cold pass does the work
+    expect(segInPrepare).toBeGreaterThan(0);
+
+    engine.layoutPrepared(prepared);
+    engine.layoutPrepared(prepared);
+    expect(measureCalls).toBe(measuredInPrepare); // hot pass adds zero measurement
+    expect(segSpy.mock.calls.length).toBe(segInPrepare); // and zero segmentation
+    segSpy.mockRestore();
+  });
+
+  it('reflows prepared text at a new width without re-measuring', () => {
+    let measureCalls = 0;
+    const m: GlyphMeasurer = {
+      measure: () => {
+        measureCalls++;
+        return 20;
+      },
+    };
+    const engine = new LayoutEngine(1000, 1000, m);
+    const prepared = engine.prepare('A B C', {}, 32);
+    const wide = engine.layoutPrepared(prepared);
+    const afterPrepare = measureCalls;
+    expect(Math.max(...wide.nodes.map((n) => n.y))).toBe(0); // one line
+
+    engine.maxWidth = 50; // narrow → must wrap, reusing the SAME prepared data
+    const narrow = engine.layoutPrepared(prepared);
+    expect(Math.max(...narrow.nodes.map((n) => n.y))).toBeGreaterThan(0); // wrapped
+    expect(measureCalls).toBe(afterPrepare); // no re-measurement on reflow
+  });
+
+  it('layoutPreparedIntoBuffer matches layoutTextIntoBuffer', () => {
+    const engine = new LayoutEngine(100, 200);
+    const b1 = new LayoutResultBuffer();
+    const b2 = new LayoutResultBuffer();
+    engine.layoutTextIntoBuffer('A B', atlas, 32, b1);
+    engine.layoutPreparedIntoBuffer(engine.prepare('A B', atlas, 32), b2);
+    expect(b2.count).toBe(b1.count);
+    for (let i = 0; i < b1.count; i++) {
+      expect(b2.chars[i]).toBe(b1.chars[i]);
+      expect(b2.xs[i]).toBe(b1.xs[i]);
+      expect(b2.ys[i]).toBe(b1.ys[i]);
+    }
   });
 });
