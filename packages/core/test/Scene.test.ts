@@ -442,6 +442,37 @@ describe('Scene render loop: culling, onDemand, a11y early-out', () => {
 
     expect(wheels).toBe(1);
   });
+
+  function mountInteractive(scene: Scene, id: string): HTMLElement {
+    const e = new SpyEntity(id, { x: 0, y: 0, width: 80, height: 80 }) as SpyEntity;
+    e.interactive = true;
+    e.width = 80;
+    e.height = 80;
+    scene.add(e);
+    tick(scene);
+    return (scene as unknown as { a11yElements: Map<string, HTMLElement> }).a11yElements.get(id)!;
+  }
+
+  it('sets touch-action:none on interactive shadow nodes (canvas owns gestures)', () => {
+    const scene = makeScene();
+    const el = mountInteractive(scene, 'ta');
+    expect(el.style.touchAction).toBe('none');
+  });
+
+  it('captures the pointer on pointerdown and releases it on pointerup', () => {
+    const scene = makeScene();
+    const el = mountInteractive(scene, 'cap');
+    const captured: number[] = [];
+    const released: number[] = [];
+    el.setPointerCapture = (id: number) => captured.push(id);
+    el.releasePointerCapture = (id: number) => released.push(id);
+
+    el.dispatchEvent(Object.assign(new Event('pointerdown'), { pointerId: 7 }));
+    el.dispatchEvent(Object.assign(new Event('pointerup'), { pointerId: 7 }));
+
+    expect(captured).toEqual([7]);
+    expect(released).toEqual([7]);
+  });
 });
 
 describe('Scene syncA11y — text input IME / selection / focus forwarding', () => {
