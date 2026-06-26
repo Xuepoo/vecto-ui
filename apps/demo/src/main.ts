@@ -58,8 +58,10 @@ function bootstrap() {
     font: '400 14px "Outfit", sans-serif',
     color: '#fff',
     accent: '#00f0ff',
+    onChange: (checked) => {
+      nexus.physicsEnabled = checked;
+    },
   });
-  physicsToggle.on('change', (e: any) => (nexus.physicsEnabled = e.checked));
   leftStack.add(physicsToggle);
 
   const btnRow = new Stack({ direction: 'horizontal', gap: 12 });
@@ -132,16 +134,16 @@ function bootstrap() {
     font: '400 14px "Outfit", sans-serif',
     color: '#fff',
     accent: '#ff00aa',
-  });
-  a11yToggle.on('change', (e: any) => {
-    if (e.checked) {
-      document.head.insertAdjacentHTML(
-        'beforeend',
-        '<style id="a11y-debug">div[data-vecto-id] { opacity: 1 !important; background: rgba(255,0,170,0.15) !important; border: 1px dashed #ff00aa !important; color: #fff !important; font-family: monospace; }</style>',
-      );
-    } else {
-      document.getElementById('a11y-debug')?.remove();
-    }
+    onChange: (checked) => {
+      if (checked) {
+        document.head.insertAdjacentHTML(
+          'beforeend',
+          '<style id="a11y-debug">*[data-vecto-id] { opacity: 1 !important; background: rgba(255,0,170,0.15) !important; border: 1px dashed #ff00aa !important; color: #fff !important; font-family: monospace; }</style>',
+        );
+      } else {
+        document.getElementById('a11y-debug')?.remove();
+      }
+    },
   });
   rightStack.add(a11yToggle);
 
