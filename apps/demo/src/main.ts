@@ -1,329 +1,152 @@
-import { Scene, Entity, LayoutEngine, type GlyphMeasurer, type IRenderer } from '@vecto-ui/core';
-import { Text, Button, Card, Stack, Input, Checkbox, Toggle } from '@vecto-ui/ui';
-import { setupFPSMonitor } from './shared/fpsMonitor';
-
-const RENDER_WEIGHT = 600;
-
-function boldMeasurer(): GlyphMeasurer | null {
-  if (typeof document === 'undefined') return null;
-  const ctx = document.createElement('canvas').getContext('2d');
-  if (!ctx) return null;
-  const base = 100;
-  const cache = new Map<string, number>();
-  return {
-    measure(char: string, fontSize: number): number {
-      let w = cache.get(char);
-      if (w === undefined) {
-        ctx.font = `${RENDER_WEIGHT} ${base}px "Outfit", sans-serif`;
-        w = ctx.measureText(char).width;
-        cache.set(char, w);
-      }
-      return w * (fontSize / base);
-    },
-  };
-}
-
-if ((window as any).__VECTO_HMR_CLEANUP) {
-  (window as any).__VECTO_HMR_CLEANUP();
-}
-let isRunning = true;
-(window as any).__VECTO_HMR_CLEANUP = () => {
-  isRunning = false;
-};
-
-const pointer = { x: -1e9, y: -1e9, down: false };
-export let scrollProgress = 0;
-
-class Glyph extends Entity {
-  private homeX: number;
-  private homeY: number;
-  private vx = 0;
-  private vy = 0;
-  public size: number;
-  private char: string;
-  private color: string;
-  private litUntil = 0;
-  private randX = (Math.random() - 0.5) * 2000;
-  private randY = (Math.random() - 0.5) * 2000;
-
-  constructor(char: string, homeX: number, homeY: number, size: number, color: string) {
-    super();
-    this.char = char;
-    this.homeX = homeX;
-    this.homeY = homeY;
-    this.size = size;
-    this.color = color;
-    this.x = homeX;
-    this.y = homeY;
-    this.width = size * 0.62;
-    this.height = size;
-    this.interactive = false;
-  }
-
-  centerX(): number {
-    return this.x + this.width / 2;
-  }
-  centerY(): number {
-    return this.y - this.height / 2;
-  }
-
-  lit(time: number): void {
-    this.litUntil = time + 320;
-  }
-
-  isPointInside(gx: number, gy: number): boolean {
-    return gx >= this.x && gx <= this.x + this.width && gy <= this.y && gy >= this.y - this.height;
-  }
-
-  update(dt: number, time: number): void {
-    const frames = Math.min(dt, 48) / 16.67;
-
-    const dx = this.centerX() - pointer.x;
-    const dy = this.centerY() - pointer.y;
-    const dist = Math.hypot(dx, dy) || 0.0001;
-    const radius = pointer.down ? 300 : 200;
-    if (dist < radius) {
-      const push = (1 - dist / radius) * (pointer.down ? 7 : 4);
-      this.vx += (dx / dist) * push * frames;
-      this.vy += (dy / dist) * push * frames;
-    }
-
-    const scatterStrength = Math.min(1, scrollProgress * 2.5);
-    const targetX = this.homeX + this.randX * scatterStrength;
-    const targetY = this.homeY + this.randY * scatterStrength;
-
-    this.vx += (targetX - this.x) * 0.06 * frames;
-    this.vy += (targetY - this.y) * 0.06 * frames;
-    this.vx *= 0.82;
-    this.vy *= 0.82;
-    this.x += this.vx * frames;
-    this.y += this.vy * frames;
-
-    const off = Math.hypot(this.x - this.homeX, this.y - this.homeY);
-    const lit = time < this.litUntil;
-    this._fill = lit ? '#38bdf8' : off > 4 ? this.color : '#f8fafc';
-  }
-
-  private _fill = '#f8fafc';
-
-  getBounds() {
-    return { x: 0, y: -this.height, width: this.width, height: this.height };
-  }
-
-  render(r: IRenderer): void {
-    r.fillText(this.char, 0, 0, `${RENDER_WEIGHT} ${this.size}px "Outfit", sans-serif`, this._fill);
-  }
-}
-
-class MagneticText extends Entity {
-  private glyphs: Glyph[] = [];
-
-  constructor(lines: { text: string; size: number }[], cx: number, topY: number) {
-    super();
-    this.interactive = false;
-    const engine = new LayoutEngine(1e9, 1e9, boldMeasurer());
-
-    let y = topY;
-    for (const line of lines) {
-      const prepared = engine.prepare(line.text, {}, line.size);
-      const laid = engine.layoutPrepared(prepared);
-      const lineWidth = laid.totalWidth;
-      const startX = cx - lineWidth / 2;
-      for (const node of laid.nodes) {
-        if (node.char.trim().length === 0) continue;
-        const colors = ['#38bdf8', '#818cf8', '#c084fc', '#e879f9', '#2dd4bf'];
-        const neonColor = colors[Math.floor(Math.random() * colors.length)];
-        const g = new Glyph(
-          node.char,
-          startX + node.x,
-          y + node.y + line.size,
-          line.size,
-          neonColor,
-        );
-        this.glyphs.push(g);
-        this.add(g);
-      }
-      y += line.size * 1.5;
-    }
-  }
-
-  hit(wx: number, wy: number, time: number): void {
-    for (const g of this.glyphs) {
-      if (g.isPointInside(wx, wy)) {
-        g.lit(time);
-        break;
-      }
-    }
-  }
-
-  get count(): number {
-    return this.glyphs.length;
-  }
-
-  isPointInside(): boolean {
-    return false;
-  }
-  render(): void {}
-}
+import { Scene } from '@vecto-ui/core';
+import { Card, Stack, Text, Toggle, Button, Input } from '@vecto-ui/ui';
+import { NexusGraph } from './nexus/NexusGraph';
 
 function bootstrap() {
   document.body.innerHTML = '';
-  document.body.style.cssText = 'margin:0;overflow-x:hidden;background:transparent';
+  document.body.style.cssText =
+    'margin:0;overflow:hidden;background:#0a0a0f;font-family:"Outfit",sans-serif;color:#fff';
 
-  const proxy = document.createElement('div');
-  proxy.style.cssText =
-    'position:absolute;top:0;left:0;width:1px;height:300vh;pointer-events:none;z-index:0';
-  document.body.appendChild(proxy);
-
+  // We keep the old root for A11y structure
   const parent = document.createElement('div');
   parent.style.cssText = 'position:relative;width:100vw;height:100vh';
   document.body.appendChild(parent);
 
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:1';
+  canvas.style.cssText = 'position:absolute;top:0;left:0;width:100vw;height:100vh;z-index:1';
   parent.appendChild(canvas);
 
-  const scene = new Scene(canvas);
+  const scene = new Scene(canvas, { pointBackend: 'webgl' });
+  const nexus = new NexusGraph(8000); // 8,000 nodes
+  scene.add(nexus);
 
-  const cx = window.innerWidth / 2;
-  const cy = window.innerHeight / 2;
-
-  // The text takes ~230px vertically, and the card takes 320px.
-  // We use startY to center the whole group vertically.
-  const startY = Math.max(40, cy - 290);
-
-  const text = new MagneticText(
-    [
-      { text: 'VectoUI', size: 96 },
-      { text: 'a Zero-DOM canvas UI runtime', size: 34 },
-      { text: 'every glyph is math — move your cursor', size: 22 },
-    ],
-    cx,
-    startY,
-  );
-  scene.add(text);
-
-  const form = new Stack({ direction: 'vertical', gap: 20 });
-  form.add(
-    new Text('Try the A11y UI', { font: '600 24px "Outfit", sans-serif', color: '#f8fafc' }),
-  );
-  form.add(
-    new Input({
-      width: 312,
-      placeholder: 'you@example.com',
-      font: '400 15px "Outfit", sans-serif',
-      bg: 'rgba(15, 23, 42, 0.4)',
-      border: 'rgba(255, 255, 255, 0.1)',
-      color: '#f8fafc',
-      placeholderColor: '#64748b',
-      radius: 10,
-    }),
-  );
-  form.add(
-    new Input({
-      width: 312,
-      placeholder: 'Password',
-      font: '400 15px "Outfit", sans-serif',
-      bg: 'rgba(15, 23, 42, 0.4)',
-      border: 'rgba(255, 255, 255, 0.1)',
-      color: '#f8fafc',
-      placeholderColor: '#64748b',
-      radius: 10,
-    }),
-  );
-  form.add(
-    new Checkbox({
-      label: 'I accept the terms',
-      font: '400 14px "Outfit", sans-serif',
-      color: '#cbd5e1',
-      accent: '#6366f1',
-    }),
-  );
-  form.add(
-    new Toggle({
-      label: 'Subscribe to updates',
-      checked: true,
-      font: '400 14px "Outfit", sans-serif',
-      color: '#cbd5e1',
-      accent: '#6366f1',
-    }),
-  );
-  form.add(
-    new Button('Create account', {
-      bg: '#4f46e5',
-      hoverBg: '#6366f1',
-      color: '#ffffff',
-      radius: 10,
-      font: '600 15px "Outfit", sans-serif',
-    }),
-  );
-
-  const card = new Card({
-    width: 360,
-    height: 350,
-    bg: 'rgba(30, 41, 59, 0.4)',
-    border: 'rgba(255, 255, 255, 0.08)',
-    radius: 16,
+  // Left Panel - Glassmorphism UI
+  const leftCard = new Card({
+    width: 320,
+    height: 420,
+    bg: 'rgba(20, 20, 30, 0.65)',
+    border: 'rgba(255, 255, 255, 0.1)',
     padding: 24,
+    radius: 16,
   });
-  card.add(form.setPosition(24, 24));
-  scene.add(card.setPosition(cx - 180, startY + 260));
+  const leftStack = new Stack({ direction: 'vertical', gap: 20 });
+  leftStack.add(
+    new Text('Glassmorphism', { font: '600 24px "Outfit", sans-serif', color: '#fff' }),
+  );
+  leftStack.add(
+    new Input({
+      width: 272,
+      placeholder: 'Search node...',
+      font: '400 15px "Outfit", sans-serif',
+      bg: 'rgba(0,0,0,0.4)',
+      border: 'rgba(255,255,255,0.1)',
+      color: '#fff',
+      radius: 8,
+    }),
+  );
 
-  const finalCardY = startY + 260;
-  const cardStartOffset = 400;
+  const physicsToggle = new Toggle({
+    label: 'Physics Engine',
+    checked: true,
+    font: '400 14px "Outfit", sans-serif',
+    color: '#fff',
+    accent: '#00f0ff',
+  });
+  physicsToggle.on('change', (e: any) => (nexus.physicsEnabled = e.checked));
+  leftStack.add(physicsToggle);
 
-  const uiController = new (class extends Entity {
-    isPointInside() {
-      return false;
+  const spawnBtn = new Button('Spawn 5000 Nodes', {
+    bg: 'rgba(0, 240, 255, 0.2)',
+    hoverBg: 'rgba(0, 240, 255, 0.4)',
+    color: '#00f0ff',
+    radius: 8,
+    font: '600 14px "Outfit", sans-serif',
+  });
+  spawnBtn.on('click', () => {
+    nexus.addNodes(5000);
+  });
+  leftStack.add(spawnBtn);
+
+  leftCard.add(leftStack.setPosition(24, 24));
+  scene.add(leftCard.setPosition(40, window.innerHeight / 2 - 210));
+
+  // Right Panel - Monitor
+  const rightCard = new Card({
+    width: 280,
+    height: 200,
+    bg: 'rgba(20, 20, 30, 0.65)',
+    border: 'rgba(255, 255, 255, 0.1)',
+    padding: 24,
+    radius: 16,
+  });
+  const rightStack = new Stack({ direction: 'vertical', gap: 16 });
+
+  const fpsText = new Text('FPS: --', { font: '400 16px "Outfit", monospace', color: '#00f0ff' });
+  const countText = new Text('Entity Count: 8000', {
+    font: '400 16px "Outfit", monospace',
+    color: '#ff00aa',
+  });
+
+  rightStack.add(fpsText);
+  rightStack.add(countText);
+
+  // A11y Toggle
+  const a11yToggle = new Toggle({
+    label: 'Accessibility mode',
+    checked: false,
+    font: '400 14px "Outfit", sans-serif',
+    color: '#fff',
+    accent: '#ff00aa',
+  });
+  a11yToggle.on('change', (e: any) => {
+    if (e.checked) {
+      document.head.insertAdjacentHTML(
+        'beforeend',
+        '<style id="a11y-debug">div[data-vecto-id] { opacity: 1 !important; background: rgba(255,0,170,0.15) !important; border: 1px dashed #ff00aa !important; color: #fff !important; font-family: monospace; }</style>',
+      );
+    } else {
+      document.getElementById('a11y-debug')?.remove();
     }
-    render() {}
-  })();
-  uiController.update = () => {
-    const uiProgress = Math.max(0, Math.min(1, (scrollProgress - 0.4) / 0.6));
-    card.y = finalCardY + cardStartOffset * (1 - uiProgress);
+  });
+  rightStack.add(a11yToggle);
 
-    const isInteractive = scrollProgress > 0.95;
-    form.interactive = isInteractive;
-    card.interactive = isInteractive;
-  };
-  scene.add(uiController);
+  rightCard.add(rightStack.setPosition(24, 24));
+  scene.add(rightCard.setPosition(window.innerWidth - 320, window.innerHeight / 2 - 100));
 
   scene.start();
 
-  const move = (e: PointerEvent) => {
-    pointer.x = e.clientX;
-    pointer.y = e.clientY;
-  };
-  window.addEventListener('pointermove', move);
-  window.addEventListener('pointerdown', (e) => {
-    pointer.down = true;
-    pointer.x = e.clientX;
-    pointer.y = e.clientY;
-    text.hit(e.clientX, e.clientY, performance.now());
-  });
-  window.addEventListener('pointerup', () => (pointer.down = false));
-  window.addEventListener('pointerleave', () => {
-    pointer.x = -1e9;
-    pointer.y = -1e9;
-  });
+  // Custom Top bar title for the Demo
+  const title = document.createElement('div');
+  title.style.cssText =
+    'position:fixed;top:20px;left:40px;display:flex;align-items:center;gap:12px;z-index:20;font-family:"Outfit",sans-serif;pointer-events:none;';
+  title.innerHTML = `
+    <span style="font-weight:800;font-size:24px;color:#fff;">VectoUI</span>
+    <span style="font-size:12px;padding:4px 10px;border-radius:12px;border:1px solid #00f0ff;color:#00f0ff;background:rgba(0,240,255,0.1);">Killer Demo</span>
+  `;
+  parent.appendChild(title);
 
-  setupFPSMonitor(`Magnetic Type ×${text.count} glyphs + A11y UI`, () => isRunning);
-
-  const hint = document.createElement('div');
-  hint.style.cssText =
-    'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);color:#94a3b8;font:400 14px "Outfit", sans-serif;letter-spacing:1px;pointer-events:none;z-index:20';
-  hint.textContent = 'Move the cursor to repel glyphs · Scroll down to reveal UI';
-  parent.appendChild(hint);
-
-  window.addEventListener('scroll', () => {
-    const maxScroll = document.body.scrollHeight - window.innerHeight;
-    scrollProgress = Math.max(0, Math.min(1, window.scrollY / (maxScroll || 1)));
-    if (hint) {
-      hint.style.opacity = Math.max(0, 1 - scrollProgress * 3).toString();
+  // FPS tracking
+  let frames = 0;
+  let lastTime = performance.now();
+  const updateStats = () => {
+    frames++;
+    const now = performance.now();
+    if (now - lastTime >= 1000) {
+      fpsText.text = `FPS: ${frames}`;
+      countText.text = `Entity Count: ${nexus.nodes.length}`;
+      frames = 0;
+      lastTime = now;
     }
+    requestAnimationFrame(updateStats);
+  };
+  requestAnimationFrame(updateStats);
+
+  // Responsive resize
+  window.addEventListener('resize', () => {
+    leftCard.y = window.innerHeight / 2 - 210;
+    rightCard.x = window.innerWidth - 320;
+    rightCard.y = window.innerHeight / 2 - 100;
   });
-  window.scrollTo(0, 0);
-  scrollProgress = 0;
 }
 
 bootstrap();
