@@ -164,4 +164,15 @@ describe('Entity Component System', () => {
     e.update(50, 100); // complete
     expect(e.hasPendingAnimations()).toBe(false);
   });
+
+  describe('Entity getWorldRotation', () => {
+    it('calculates accumulated rotation up the tree', () => {
+      const parent = new TestEntity('parent');
+      parent.rotation = 0.5;
+      const child = new TestEntity('child');
+      child.rotation = 0.2;
+      parent.add(child);
+      expect(child.getWorldRotation()).toBeCloseTo(0.7);
+    });
+  });
 });
