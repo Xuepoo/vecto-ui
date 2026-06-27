@@ -1,3 +1,5 @@
+import { ArabicShaper } from '@vecto-ui/core';
+
 /**
  * Shared text measurement utilities backed by a single lazily-created offscreen
  * Canvas 2D context. DOM-free environments fall back to a rough estimate so the
@@ -45,7 +47,8 @@ const measureCache = new Map<string, number>();
  * @returns Pixel width; a rough `0.5em`-per-char estimate when no DOM is available.
  */
 export function measureText(text: string, font: string): number {
-  const key = `${font} ${text}`;
+  const shaped = ArabicShaper.shapeArabic(text).shapedText;
+  const key = `${font} ${shaped}`;
   const cached = measureCache.get(key);
   if (cached !== undefined) {
     // Promote to most-recently-used (delete + re-insert moves it to the end).
@@ -57,10 +60,10 @@ export function measureText(text: string, font: string): number {
   const ctx = getCtx();
   let width: number;
   if (!ctx) {
-    width = text.length * fontSizePx(font) * 0.5;
+    width = shaped.length * fontSizePx(font) * 0.5;
   } else {
     ctx.font = font;
-    width = ctx.measureText(text).width;
+    width = ctx.measureText(shaped).width;
   }
 
   measureCache.set(key, width);
