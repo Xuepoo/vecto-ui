@@ -518,6 +518,22 @@ export abstract class Entity {
   }
 
   /**
+   * Accumulated world rotation: this entity's own `rotation` plus
+   * that of every ancestor (excluding the scene root).
+   *
+   * @returns The accumulated world rotation in radians.
+   */
+  public getWorldRotation(): number {
+    let rot = this.rotation;
+    let curr = this.parent;
+    while (curr && curr.id !== 'root') {
+      rot += curr.rotation;
+      curr = curr.parent;
+    }
+    return rot;
+  }
+
+  /**
    * Return `true` when the given world-space point lies within this entity's
    * interactive hit area.
    *

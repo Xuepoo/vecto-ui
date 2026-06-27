@@ -77,16 +77,6 @@ export class MSDFTextEntity extends Entity {
     return lx >= 0 && lx <= this.layoutResult.width && ly >= 0 && ly <= this.layoutResult.height;
   }
 
-  public getWorldRotation(): number {
-    let rot = this.rotation;
-    let curr = this.parent;
-    while (curr && curr.id !== 'root') {
-      rot += curr.rotation;
-      curr = curr.parent;
-    }
-    return rot;
-  }
-
   public render(renderer: any): void {
     if (!this.layoutResult) return;
     const scene = this.scene;
