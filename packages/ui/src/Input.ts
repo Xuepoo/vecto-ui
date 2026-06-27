@@ -1,6 +1,6 @@
-import { A11yAttributes, IRenderer } from '@vecto-ui/core';
+import { A11yAttributes, IRenderer, LayoutEngine } from '@vecto-ui/core';
 import { UIComponent } from './UIComponent';
-import { measureText } from './measure';
+import { measureText, fontSizePx } from './measure';
 
 /** Construction options for {@link Input}. */
 export interface InputOptions {
@@ -111,9 +111,90 @@ export class Input extends UIComponent {
     };
   }
 
+  private cachedValue: string = '';
+  private cachedFont: string = '';
+  private cachedLayout: any = null;
+
+  private getLayout(): any {
+    if (this.value === this.cachedValue && this.font === this.cachedFont && this.cachedLayout) {
+      return this.cachedLayout;
+    }
+
+    const fSize = fontSizePx(this.font);
+    const engine = new LayoutEngine(1000000, 1000, {
+      measure: (char: string) => measureText(char, this.font),
+    });
+    engine.preserveLeadingSpaces = true;
+    const layout = engine.layoutText(this.value, {}, fSize);
+
+    this.cachedValue = this.value;
+    this.cachedFont = this.font;
+    this.cachedLayout = layout;
+    return layout;
+  }
+
   /** Measured x of the glyph boundary before char index `i` (text-relative). */
   private charOffset(i: number): number {
-    return measureText(this.value.slice(0, i), this.font);
+    if (this.value.length === 0) return 0;
+
+    let hasRTL = false;
+    for (let j = 0; j < this.value.length; j++) {
+      const code = this.value.charCodeAt(j);
+      if (
+        (code >= 0x0590 && code <= 0x05ff) ||
+        (code >= 0x0600 && code <= 0x06ff) ||
+        (code >= 0xfb50 && code <= 0xfeff)
+      ) {
+        hasRTL = true;
+        break;
+      }
+    }
+
+    if (!hasRTL) {
+      return measureText(this.value.slice(0, i), this.font);
+    }
+
+    const layout = this.getLayout();
+    if (layout.nodes.length === 0) return 0;
+
+    let targetNode: any = null;
+    let isRTL = false;
+
+    for (const node of layout.nodes) {
+      const start = node.sourceIndex ?? 0;
+      const len = node.sourceLength ?? 0;
+      if (i >= start && i <= start + len) {
+        targetNode = node;
+        isRTL = !!node.isRTL;
+        if (i > start && i < start + len) {
+          break;
+        }
+      }
+    }
+
+    if (!targetNode) {
+      let maxNode = layout.nodes[0];
+      for (const node of layout.nodes) {
+        if (
+          (node.sourceIndex ?? 0) + (node.sourceLength ?? 0) >
+          (maxNode.sourceIndex ?? 0) + (maxNode.sourceLength ?? 0)
+        ) {
+          maxNode = node;
+        }
+      }
+      targetNode = maxNode;
+      isRTL = !!maxNode.isRTL;
+    }
+
+    const start = targetNode.sourceIndex ?? 0;
+    const len = targetNode.sourceLength ?? 0;
+    const fraction = len > 0 ? (i - start) / len : 0;
+
+    if (isRTL) {
+      return targetNode.x + targetNode.width * (1.0 - fraction);
+    } else {
+      return targetNode.x + targetNode.width * fraction;
+    }
   }
 
   /** Screen-space x of the caret (after scroll), in the component's box coords. */
@@ -155,11 +236,38 @@ export class Input extends UIComponent {
     if (this.selectionStart !== this.selectionEnd) {
       const a = Math.min(this.selectionStart, this.selectionEnd);
       const b = Math.max(this.selectionStart, this.selectionEnd);
-      const sx = textOriginX + this.charOffset(a);
-      const ex = textOriginX + this.charOffset(b);
-      r.beginPath();
-      r.roundRect(sx, this.height * 0.2, ex - sx, this.height * 0.6, 0);
-      r.fill(this.selectionColor);
+
+      let hasRTL = false;
+      for (let j = 0; j < this.value.length; j++) {
+        const code = this.value.charCodeAt(j);
+        if (
+          (code >= 0x0590 && code <= 0x05ff) ||
+          (code >= 0x0600 && code <= 0x06ff) ||
+          (code >= 0xfb50 && code <= 0xfeff)
+        ) {
+          hasRTL = true;
+          break;
+        }
+      }
+
+      if (!hasRTL) {
+        const sx = textOriginX + this.charOffset(a);
+        const ex = textOriginX + this.charOffset(b);
+        r.beginPath();
+        r.roundRect(sx, this.height * 0.2, ex - sx, this.height * 0.6, 0);
+        r.fill(this.selectionColor);
+      } else {
+        const layout = this.getLayout();
+        r.beginPath();
+        for (const node of layout.nodes) {
+          const start = node.sourceIndex ?? 0;
+          const len = node.sourceLength ?? 0;
+          if (!(start + len <= a || start >= b)) {
+            r.roundRect(textOriginX + node.x, this.height * 0.2, node.width, this.height * 0.6, 0);
+          }
+        }
+        r.fill(this.selectionColor);
+      }
     }
 
     // Value (or placeholder) text.

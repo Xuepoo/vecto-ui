@@ -1,4 +1,4 @@
-import { A11yAttributes, IRenderer } from '@vecto-ui/core';
+import { A11yAttributes, IRenderer, LayoutEngine } from '@vecto-ui/core';
 import { UIComponent } from './UIComponent';
 import { measureText, fontSizePx } from './measure';
 
@@ -240,9 +240,97 @@ export class TextArea extends UIComponent {
     return fontSizePx(this.font) * this.lineHeightFactor;
   }
 
+  private cachedValue: string = '';
+  private cachedFont: string = '';
+  private cachedWidth: number = 0;
+  private cachedLines: WrappedLine[] = [];
+
   /** Wrap the current value to the inner box width. */
   private computeLines(): WrappedLine[] {
-    return wrapText(this.value, this.innerWidth(), (s) => measureText(s, this.font));
+    const innerW = this.innerWidth();
+    if (
+      this.value === this.cachedValue &&
+      this.font === this.cachedFont &&
+      innerW === this.cachedWidth &&
+      this.cachedLines.length > 0
+    ) {
+      return this.cachedLines;
+    }
+
+    const lines: WrappedLine[] = [];
+    const paragraphs = this.value.split('\n');
+    let pStart = 0;
+    const fSize = fontSizePx(this.font);
+
+    const engine = new LayoutEngine(innerW, 1000000, {
+      measure: (char: string) => measureText(char, this.font),
+    });
+    engine.preserveLeadingSpaces = true;
+
+    for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+      const paragraphText = paragraphs[pIdx];
+      if (paragraphText === '') {
+        lines.push({ text: '', start: pStart, end: pStart });
+        pStart += 1; // consume '\n'
+        continue;
+      }
+
+      const layout = engine.layoutText(paragraphText, {}, fSize);
+
+      const lineGroups: any[][] = [];
+      let currentGroup: any[] = [];
+      let currentY = -1;
+
+      for (const node of layout.nodes) {
+        if (currentY === -1) {
+          currentY = node.y;
+        }
+        if (Math.abs(node.y - currentY) > 0.1 * fSize) {
+          lineGroups.push(currentGroup);
+          currentGroup = [node];
+          currentY = node.y;
+        } else {
+          currentGroup.push(node);
+        }
+      }
+      if (currentGroup.length > 0) {
+        lineGroups.push(currentGroup);
+      }
+
+      if (lineGroups.length === 0) {
+        lines.push({ text: '', start: pStart, end: pStart + paragraphText.length });
+      } else {
+        for (const group of lineGroups) {
+          group.sort((a, b) => a.x - b.x);
+
+          const text = group.map((n) => n.char).join('');
+
+          let start = paragraphText.length;
+          let end = 0;
+          for (const node of group) {
+            const nodeStart = node.sourceIndex ?? 0;
+            const nodeLen = node.sourceLength ?? 0;
+            if (nodeStart < start) start = nodeStart;
+            if (nodeStart + nodeLen > end) end = nodeStart + nodeLen;
+          }
+
+          lines.push({
+            text,
+            start: pStart + start,
+            end: pStart + end,
+            nodes: group,
+          } as any);
+        }
+      }
+
+      pStart += paragraphText.length + 1;
+    }
+
+    this.cachedValue = this.value;
+    this.cachedFont = this.font;
+    this.cachedWidth = innerW;
+    this.cachedLines = lines;
+    return lines;
   }
 
   /**
@@ -261,9 +349,47 @@ export class TextArea extends UIComponent {
   }
 
   /** X (text-relative) of `offset` within its line. */
-  private offsetX(line: WrappedLine, offset: number): number {
-    const within = Math.max(0, Math.min(line.text.length, offset - line.start));
-    return measureText(line.text.slice(0, within), this.font);
+  private offsetX(line: any, offset: number): number {
+    if (!line.nodes || line.nodes.length === 0) return 0;
+
+    const pStart = line.start - (line.nodes[0].sourceIndex ?? 0);
+    let targetNode: any = null;
+    let isRTL = false;
+
+    for (const node of line.nodes) {
+      const nodeAbsStart = pStart + (node.sourceIndex ?? 0);
+      const len = node.sourceLength ?? 0;
+      if (offset >= nodeAbsStart && offset <= nodeAbsStart + len) {
+        targetNode = node;
+        isRTL = !!node.isRTL;
+        if (offset > nodeAbsStart && offset < nodeAbsStart + len) {
+          break;
+        }
+      }
+    }
+
+    if (!targetNode) {
+      let maxNode = line.nodes[0];
+      for (const node of line.nodes) {
+        const nodeAbsStart = pStart + (node.sourceIndex ?? 0);
+        const maxAbsStart = pStart + (maxNode.sourceIndex ?? 0);
+        if (nodeAbsStart + (node.sourceLength ?? 0) > maxAbsStart + (maxNode.sourceLength ?? 0)) {
+          maxNode = node;
+        }
+      }
+      targetNode = maxNode;
+      isRTL = !!maxNode.isRTL;
+    }
+
+    const nodeAbsStart = pStart + (targetNode.sourceIndex ?? 0);
+    const len = targetNode.sourceLength ?? 0;
+    const fraction = len > 0 ? (offset - nodeAbsStart) / len : 0;
+
+    if (isRTL) {
+      return targetNode.x + targetNode.width * (1.0 - fraction);
+    } else {
+      return targetNode.x + targetNode.width * fraction;
+    }
   }
 
   /** Keep the caret line within the padded box by adjusting `scrollTop`. */
@@ -311,16 +437,33 @@ export class TextArea extends UIComponent {
       const a = Math.min(this.selectionStart, this.selectionEnd);
       const b = Math.max(this.selectionStart, this.selectionEnd);
       for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+        const line = lines[i] as any;
         const lo = Math.max(a, line.start);
         const hi = Math.min(b, line.end);
-        if (hi < lo) continue;
-        const sx = originX + this.offsetX(line, lo);
-        const ex = originX + this.offsetX(line, hi);
+        if (hi <= lo) continue;
+
         const y = originY + i * lh;
-        r.beginPath();
-        r.roundRect(sx, y, Math.max(1, ex - sx), lh, 0);
-        r.fill(this.selectionColor);
+
+        if (!line.nodes || line.nodes.length === 0) {
+          // Fallback for empty/whitespace-only selection
+          const sx = originX + this.offsetX(line, lo);
+          const ex = originX + this.offsetX(line, hi);
+          r.beginPath();
+          r.roundRect(sx, y, Math.max(1, ex - sx), lh, 0);
+          r.fill(this.selectionColor);
+        } else {
+          // Precise per-glyph highlight
+          r.beginPath();
+          const pStart = line.start - (line.nodes[0].sourceIndex ?? 0);
+          for (const node of line.nodes) {
+            const start = pStart + (node.sourceIndex ?? 0);
+            const len = node.sourceLength ?? 0;
+            if (!(start + len <= lo || start >= hi)) {
+              r.roundRect(originX + node.x, y, node.width, lh, 0);
+            }
+          }
+          r.fill(this.selectionColor);
+        }
       }
     }
 
