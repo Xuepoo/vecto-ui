@@ -551,6 +551,8 @@ export class Markdown extends UIComponent {
   public content: Stack;
   public maxWidth: number;
   public theme: Required<MarkdownTheme>;
+  private rawMarkdown: string;
+  private tokens: Token[];
 
   constructor(markdownText: string, opts: MarkdownOptions = {}) {
     super();
@@ -560,11 +562,14 @@ export class Markdown extends UIComponent {
     this.content = new Stack({ direction: 'vertical', gap: 16 });
     this.add(this.content);
 
+    this.rawMarkdown = markdownText;
+    this.tokens = [];
     this.renderMarkdown(markdownText);
   }
 
   private renderMarkdown(text: string): void {
     const tokens = marked.lexer(text);
+    this.tokens = tokens;
     for (const token of tokens) {
       const el = this.renderToken(token);
       if (el) {
@@ -574,6 +579,97 @@ export class Markdown extends UIComponent {
 
     this.width = this.content.width;
     this.height = this.content.height;
+  }
+
+  /** Replace all markdown content (full rebuild). */
+  public setContent(markdown: string): this {
+    this.rawMarkdown = markdown;
+    // Remove all children from the content stack
+    while (this.content.children.length > 0) {
+      this.content.remove(this.content.children[this.content.children.length - 1]);
+    }
+    this.tokens = [];
+    this.renderMarkdown(markdown);
+    return this;
+  }
+
+  /** Append a markdown chunk incrementally. Reuses unchanged prefix entities. */
+  public appendMarkdown(chunk: string): this {
+    this.rawMarkdown += chunk;
+    const newTokens = marked.lexer(this.rawMarkdown);
+    const oldTokens = this.tokens;
+    const oldChildren = [...this.content.children]; // snapshot
+
+    // Find the matching prefix length (by comparing token raw source)
+    let matchLen = 0;
+    const minLen = Math.min(oldTokens.length, newTokens.length);
+    // Map from old token index to child entity index (skip 'space' tokens
+    // that produce null entities)
+    let childIdx = 0;
+    const oldTokenToChild: number[] = [];
+    for (let i = 0; i < oldTokens.length; i++) {
+      oldTokenToChild.push(childIdx);
+      if (oldTokens[i].type !== 'space') childIdx++;
+    }
+
+    // Compare tokens by raw source
+    for (let i = 0; i < minLen; i++) {
+      if (oldTokens[i].raw === newTokens[i].raw) {
+        matchLen++;
+      } else {
+        break;
+      }
+    }
+
+    // Handle the common streaming case: last token changed (paragraph grew)
+    // If only the last old token changed and it's the same type, update in-place
+    if (
+      matchLen === oldTokens.length - 1 &&
+      matchLen < newTokens.length &&
+      oldTokens[matchLen]?.type === newTokens[matchLen]?.type &&
+      newTokens[matchLen]?.type === 'paragraph'
+    ) {
+      // Update existing paragraph entity in-place via setSpans
+      const entityIdx = oldTokenToChild[matchLen];
+      const existingEntity = oldChildren[entityIdx];
+      if (existingEntity && 'setSpans' in existingEntity) {
+        // Re-render the paragraph's inline tokens
+        const pToken = newTokens[matchLen] as Tokens.Paragraph;
+        const t = this.theme;
+        // Build new spans from the token
+        const spans: StyledSpan[] = [];
+        if (pToken.tokens && pToken.tokens.length > 0) {
+          collectSpans(pToken.tokens, {}, t, spans);
+        }
+        if (spans.length === 0) {
+          spans.push({ text: pToken.text });
+        }
+        (existingEntity as any).setSpans(spans);
+        matchLen++; // This token is now handled
+      }
+    }
+
+    // Remove excess old entities (from matchLen onward)
+    for (let i = 0; i < oldTokens.length; i++) {
+      if (i >= matchLen && oldTokens[i].type !== 'space') {
+        const idx = oldTokenToChild[i];
+        if (idx < oldChildren.length) {
+          this.content.remove(oldChildren[idx]);
+        }
+      }
+    }
+
+    // Add new entities for tokens beyond matchLen
+    for (let i = matchLen; i < newTokens.length; i++) {
+      const el = this.renderToken(newTokens[i]);
+      if (el) this.content.add(el);
+    }
+
+    this.tokens = newTokens;
+    this.content.layout();
+    this.width = this.content.width;
+    this.height = this.content.height;
+    return this;
   }
 
   private renderToken(token: Token): Entity | null {

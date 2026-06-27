@@ -151,4 +151,46 @@ Plain paragraph at the end.
     expect(linkSpan!.style!.href).toBe('https://google.com');
     expect(linkSpan!.text).toBe('Google');
   });
+
+  // ── Streaming / Mutation tests ──────────────────────────────────────────
+
+  describe('Markdown streaming', () => {
+    it('setContent replaces all children', () => {
+      const md = new Markdown('# Hello');
+      expect(md.content.children.length).toBeGreaterThanOrEqual(1);
+      md.setContent('# Goodbye\n\nNew paragraph.');
+      // Should have new content
+      expect(md.content.children.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('appendMarkdown adds new block-level tokens', () => {
+      const md = new Markdown('# Title');
+      const initialCount = md.content.children.length;
+      md.appendMarkdown('\n\nNew paragraph added.');
+      expect(md.content.children.length).toBeGreaterThan(initialCount);
+    });
+
+    it('appendMarkdown reuses unchanged prefix entities', () => {
+      const md = new Markdown('# Title\n\nFirst paragraph.');
+      const firstChild = md.content.children[0]; // heading
+      md.appendMarkdown('\n\nSecond paragraph.');
+      // The heading entity should be the same object (reused, not recreated)
+      expect(md.content.children[0]).toBe(firstChild);
+    });
+
+    it('appendMarkdown updates last paragraph in-place when it grows', () => {
+      const md = new Markdown('Hello');
+      const para = md.content.children[0];
+      md.appendMarkdown(' world');
+      // The paragraph entity should be updated in place (same reference)
+      expect(md.content.children[0]).toBe(para);
+    });
+
+    it('handles incomplete code fences without crashing', () => {
+      const md = new Markdown('Some text');
+      expect(() => md.appendMarkdown('\n\n```js\nconst x = 1;')).not.toThrow();
+      // The incomplete fence might be treated as text or partial code
+      expect(md.content.children.length).toBeGreaterThanOrEqual(1);
+    });
+  });
 });
