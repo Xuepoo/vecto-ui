@@ -250,6 +250,19 @@ export class Scene {
   }
 
   /**
+   * Tear down the a11y/automation shadow nodes for `entity` and its descendants
+   * without removing it from the scene graph. Components that manage dynamic
+   * interactive *child* entities (e.g. a {@link Entity}'s per-link hotspots) call
+   * this before discarding those children so their shadow `<a>`/controls don't
+   * leak (the per-frame `syncA11y` only creates/updates, it never prunes).
+   *
+   * @param entity - The subtree whose shadow nodes should be removed.
+   */
+  public detachA11y(entity: Entity): void {
+    this.removeA11yRecursively(entity);
+  }
+
+  /**
    * Add an overlay entity to the overlay root, bypassing main tree clipping bounds.
    */
   public showOverlay(overlay: Entity): void {

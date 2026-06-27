@@ -67,6 +67,14 @@ describe('RichText', () => {
     expect(rt.height).toBeGreaterThan(0);
   });
 
+  it('paints link runs in the link color by default', () => {
+    const { r, calls } = recordingRenderer();
+    new RichText([{ text: 'L', style: { href: 'https://x.dev' } }], {
+      linkColor: '#1199ff',
+    }).render(r);
+    expect(calls.find((c) => c.text === 'L')?.color).toBe('#1199ff');
+  });
+
   it('does not throw rendering a multi-run, wrapped paragraph', () => {
     const { r } = recordingRenderer();
     const rt = new RichText(
