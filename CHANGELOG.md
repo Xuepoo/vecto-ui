@@ -11,6 +11,14 @@ This file keeps a curated, high-level history. Versioning follows
 
 ## Highlights
 
+### core 0.8.0 · ui 0.4.0 (unreleased)
+
+High-performance WebGPU particle system and Native BiDi bidirectional text with complex shaping.
+
+- **WebGPU Particle Layer & Simulation (`@vecto-ui/core`)** — High-performance WGSL Compute Shader integration for 1,000,000+ particles, zero-copy render pipelines, and zero-alignment empty holes. Elegant GPU device lost recovery mechanism with exponential backoff retries, combined with a seamless CPU simulation fallback.
+- **Native BiDi & Arabic/Hebrew/Persian shaping (`@vecto-ui/core`)** — Lightweight block range character mapping (<5KB), UAX #9 Bidirectional algorithm level resolution, contextual shaping engine, and contiguous visual line reordering under text exclusions and floated layouts.
+- **UI input components Bidi support (`@vecto-ui/ui`)** — Bidi-aware logical caret positioning and visual coordinates interpolation, together with disjoint visual selection highlights in Input and TextArea.
+
 ### core 0.7.1 · three 0.2.0 (unreleased)
 
 WebGL/Three.js 3D space UI adapter integration and custom viewport control.
