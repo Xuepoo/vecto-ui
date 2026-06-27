@@ -34,6 +34,16 @@ export class BidiResolver {
     return 'L';
   }
 
+  public static getBaseLevel(text: string): number {
+    const len = text.length;
+    for (let i = 0; i < len; i++) {
+      const cls = BidiResolver.getDirectionClass(text.charCodeAt(i));
+      if (cls === 'L') return 0;
+      if (cls === 'R' || cls === 'AL') return 1;
+    }
+    return 0;
+  }
+
   public static resolveLevels(text: string): Uint8Array {
     const len = text.length;
     const classes: string[] = [];

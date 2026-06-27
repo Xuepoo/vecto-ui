@@ -19,3 +19,5 @@ export { LayoutWorkerManager } from './layout/LayoutWorkerManager';
 export { DOMPortalEntity } from './tree/DOMPortalEntity';
 export { SVGEntity } from './text/SVGEntity';
 export * from './tree/ComputeParticleEntity';
+export * from './text/ArabicShaper';
+export * from './text/BidiResolver';

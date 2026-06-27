@@ -1,3 +1,6 @@
+import { ArabicShaper } from '../text/ArabicShaper';
+import { BidiResolver } from '../text/BidiResolver';
+
 /**
  * Map from a single grapheme character to its pre-measured glyph metrics.
  *
@@ -57,6 +60,10 @@ export interface LayoutNode {
   height: number;
   /** Inline style carried from rich text; `undefined` for plain (single-style) layout. */
   style?: TextStyle;
+  sourceIndex?: number;
+  sourceLength?: number;
+  isRTL?: boolean;
+  combining?: string[];
 }
 
 /**
@@ -67,6 +74,7 @@ export interface LayoutResult {
   nodes: LayoutNode[];
   totalWidth: number;
   totalHeight: number;
+  fallbackToCanvas?: boolean;
 }
 
 /** A single measured grapheme (the "cold" half of the cold/hot split). */
@@ -76,6 +84,10 @@ export interface PreparedGlyph {
   width: number;
   /** Inline style (rich text only); drives per-glyph size, color and baseline. */
   style?: TextStyle;
+  level: number;
+  sourceIndex: number;
+  sourceLength: number;
+  combining?: string[];
 }
 
 /** A measured word/segment, ready to be placed without re-measuring. */
@@ -92,6 +104,8 @@ export interface PreparedWord {
 export interface PreparedParagraph {
   words: PreparedWord[];
   isEmpty: boolean;
+  fallbackToCanvas?: boolean;
+  baseLevel?: number;
 }
 
 /**
@@ -104,6 +118,7 @@ export interface PreparedParagraph {
 export interface PreparedText {
   paragraphs: PreparedParagraph[];
   fontSize: number;
+  fallbackToCanvas?: boolean;
 }
 
 /**
@@ -290,10 +305,13 @@ export class LayoutEngine {
     }
 
     const paragraphs: PreparedParagraph[] = [];
+    let offset = 0;
+    let fallbackToCanvas = false;
 
     for (const paragraph of text.split('\n')) {
       if (paragraph.length === 0) {
         paragraphs.push({ words: [], isEmpty: true });
+        offset += 1;
         continue;
       }
 
@@ -301,19 +319,66 @@ export class LayoutEngine {
       const cached = this.paragraphCache.get(key);
       if (cached) {
         paragraphs.push(cached);
+        if (cached.fallbackToCanvas) fallbackToCanvas = true;
+        offset += paragraph.length + 1;
         continue;
       }
 
+      // 1. Contextual shaping
+      const { shapedText, indexMap } = ArabicShaper.shapeArabic(paragraph);
+
+      // 2. BiDi Level Resolution
+      const levels = BidiResolver.resolveLevels(shapedText);
+
       const words: PreparedWord[] = [];
-      for (const segment of this.getWordSegments(paragraph)) {
+      let shapedCharIdx = 0;
+      let pFallback = false;
+
+      for (const segment of this.getWordSegments(shapedText)) {
         const word = segment.segment;
         const glyphs: PreparedGlyph[] = [];
         let width = 0;
+
         for (const char of this.getGraphemes(word)) {
-          const w = this.glyphWidth(char, fontAtlas, fontSize);
-          glyphs.push({ char, width: w });
+          const visualStart = shapedCharIdx;
+          const visualEnd = shapedCharIdx + char.length;
+
+          const rawStart = indexMap[visualStart];
+          const rawEnd = visualEnd === shapedText.length ? paragraph.length : indexMap[visualEnd];
+
+          const sourceIndex = offset + rawStart;
+          const sourceLength = rawEnd - rawStart;
+
+          const baseChar = char[0];
+          const level = levels[visualStart];
+
+          // Check if glyph is present in atlas
+          const hasGlyph = !!fontAtlas[char] || !!fontAtlas[baseChar];
+          if (char.trim().length > 0 && !hasGlyph) {
+            pFallback = true;
+            fallbackToCanvas = true;
+          }
+
+          const w = this.glyphWidth(baseChar, fontAtlas, fontSize);
+
+          // Extract combining marks
+          const combining: string[] = [];
+          for (let cIdx = 1; cIdx < char.length; cIdx++) {
+            combining.push(char[cIdx]);
+          }
+
+          glyphs.push({
+            char: baseChar,
+            width: w,
+            level,
+            sourceIndex,
+            sourceLength,
+            combining: combining.length > 0 ? combining : undefined,
+          });
           width += w;
+          shapedCharIdx += char.length;
         }
+
         words.push({
           glyphs,
           width,
@@ -321,13 +386,20 @@ export class LayoutEngine {
           isWhitespace: word.trim().length === 0,
         });
       }
-      const prepared: PreparedParagraph = { words, isEmpty: false };
+
+      const prepared: PreparedParagraph = {
+        words,
+        isEmpty: false,
+        fallbackToCanvas: pFallback || undefined,
+        baseLevel: BidiResolver.getBaseLevel(shapedText),
+      };
       if (this.paragraphCache.size > 1000) this.paragraphCache.clear();
       this.paragraphCache.set(key, prepared);
       paragraphs.push(prepared);
+      offset += paragraph.length + 1;
     }
 
-    return { paragraphs, fontSize };
+    return { paragraphs, fontSize, fallbackToCanvas: fallbackToCanvas || undefined };
   }
 
   /**
@@ -396,6 +468,8 @@ export class LayoutEngine {
 
     const paragraphs: PreparedParagraph[] = [];
     let offset = 0;
+    let fallbackToCanvas = false;
+
     for (const paragraph of fullText.split('\n')) {
       if (paragraph.length === 0) {
         paragraphs.push({ words: [], isEmpty: true });
@@ -403,27 +477,72 @@ export class LayoutEngine {
         continue;
       }
 
-      const key = `${baseFontSize} ${paragraph} ${styleSig(offset, paragraph.length)}`;
+      const key = `${baseFontSize} ${paragraph} ${styleSig(offset, paragraph.length)}`;
       const cached = this.richParagraphCache.get(key);
       if (cached) {
         paragraphs.push(cached);
+        if (cached.fallbackToCanvas) fallbackToCanvas = true;
         offset += paragraph.length + 1;
         continue;
       }
 
+      // 1. Contextual shaping
+      const { shapedText, indexMap } = ArabicShaper.shapeArabic(paragraph);
+
+      // 2. BiDi Level Resolution
+      const levels = BidiResolver.resolveLevels(shapedText);
+
       const words: PreparedWord[] = [];
-      let pOff = offset;
-      for (const segment of this.getWordSegments(paragraph)) {
+      let shapedCharIdx = 0;
+      let pFallback = false;
+
+      for (const segment of this.getWordSegments(shapedText)) {
         const word = segment.segment;
         const glyphs: PreparedGlyph[] = [];
         let width = 0;
+
         for (const char of this.getGraphemes(word)) {
-          const style = styleAt[pOff];
-          const w = this.glyphWidth(char, fontAtlas, style?.fontSize ?? baseFontSize);
-          glyphs.push({ char, width: w, style });
+          const visualStart = shapedCharIdx;
+          const visualEnd = shapedCharIdx + char.length;
+
+          const rawStart = indexMap[visualStart];
+          const rawEnd = visualEnd === shapedText.length ? paragraph.length : indexMap[visualEnd];
+
+          const sourceIndex = offset + rawStart;
+          const sourceLength = rawEnd - rawStart;
+
+          const baseChar = char[0];
+          const level = levels[visualStart];
+
+          const style = styleAt[offset + rawStart];
+          const gfs = style?.fontSize ?? baseFontSize;
+
+          const hasGlyph = !!fontAtlas[char] || !!fontAtlas[baseChar];
+          if (char.trim().length > 0 && !hasGlyph) {
+            pFallback = true;
+            fallbackToCanvas = true;
+          }
+
+          const w = this.glyphWidth(baseChar, fontAtlas, gfs);
+
+          const combining: string[] = [];
+          for (let cIdx = 1; cIdx < char.length; cIdx++) {
+            combining.push(char[cIdx]);
+          }
+
+          glyphs.push({
+            char: baseChar,
+            width: w,
+            style,
+            level,
+            sourceIndex,
+            sourceLength,
+            combining: combining.length > 0 ? combining : undefined,
+          });
           width += w;
-          pOff += char.length;
+          shapedCharIdx += char.length;
         }
+
         words.push({
           glyphs,
           width,
@@ -431,14 +550,24 @@ export class LayoutEngine {
           isWhitespace: word.trim().length === 0,
         });
       }
-      const prepared: PreparedParagraph = { words, isEmpty: false };
+
+      const prepared: PreparedParagraph = {
+        words,
+        isEmpty: false,
+        fallbackToCanvas: pFallback || undefined,
+        baseLevel: BidiResolver.getBaseLevel(shapedText),
+      };
       if (this.richParagraphCache.size > 1000) this.richParagraphCache.clear();
       this.richParagraphCache.set(key, prepared);
       paragraphs.push(prepared);
       offset += paragraph.length + 1; // + the consumed '\n'
     }
 
-    return { paragraphs, fontSize: baseFontSize };
+    return {
+      paragraphs,
+      fontSize: baseFontSize,
+      fallbackToCanvas: fallbackToCanvas || undefined,
+    };
   }
 
   /**
@@ -472,6 +601,55 @@ export class LayoutEngine {
     let segs: LineSegment[] = [{ x0: 0, x1: this.maxWidth }];
     let si = 0;
 
+    // Buffering nodes of the current line for Bidi visual reordering
+    let currentLineNodes: any[] = [];
+    let paragraphBaseLevel = 0;
+
+    const commitLine = () => {
+      if (currentLineNodes.length === 0) return;
+
+      // 1. Group contiguous visual runs to preserve gaps (e.g. exclusion masks, indentations)
+      const runs: any[][] = [];
+      let currentRun: any[] = [];
+
+      for (let j = 0; j < currentLineNodes.length; j++) {
+        const node = currentLineNodes[j];
+        const prev = currentLineNodes[j - 1];
+
+        // If there is a gap, start a new run
+        if (prev && Math.abs(node.x - (prev.x + prev.width)) > 0.001) {
+          runs.push(currentRun);
+          currentRun = [];
+        }
+        currentRun.push(node);
+      }
+      if (currentRun.length > 0) {
+        runs.push(currentRun);
+      }
+
+      // 2. Process each contiguous run independently
+      for (const run of runs) {
+        const runStartX = run[0].x;
+
+        // Visual reordering per UAX #9
+        BidiResolver.reorderVisual(run, paragraphBaseLevel);
+
+        // Re-assign visual coordinates LTR inside the run
+        let x = runStartX;
+        for (const node of run) {
+          node.x = x;
+          node.isRTL = node.level % 2 === 1;
+          x += node.width;
+        }
+
+        // Add to final layout result
+        for (const node of run) {
+          layoutNodes.push(node as LayoutNode);
+        }
+      }
+      currentLineNodes = [];
+    };
+
     // (Re)compute the segments for the line box starting at `currentY`, skipping
     // bands an exclusion fully covers. Sets segs/si/currentX; advances currentY
     // past blocked bands. Returns false when it runs past maxHeight.
@@ -493,10 +671,13 @@ export class LayoutEngine {
 
     for (const paragraph of prepared.paragraphs) {
       if (paragraph.isEmpty) {
+        commitLine(); // Flush previous line
         currentY += fontSize * 1.5;
         currentX = 0;
         continue;
       }
+
+      paragraphBaseLevel = paragraph.baseLevel ?? 0;
 
       // Tallest run in the paragraph drives line height + the shared baseline, so
       // mixed-size inline runs sit on one baseline (plain text: pMax === fontSize,
@@ -520,6 +701,7 @@ export class LayoutEngine {
             si++;
             currentX = segs[si].x0;
           } else {
+            commitLine(); // Flush visual line before wrap
             currentY += lineHeight;
             if (!startLine(lineHeight)) break;
           }
@@ -536,6 +718,7 @@ export class LayoutEngine {
                 si++;
                 currentX = segs[si].x0;
               } else {
+                commitLine(); // Flush visual line before wrap
                 currentY += lineHeight;
                 if (!startLine(lineHeight)) break;
               }
@@ -559,7 +742,7 @@ export class LayoutEngine {
           )
             continue;
 
-          layoutNodes.push({
+          currentLineNodes.push({
             char: glyph.char,
             x: currentX,
             // Drop smaller glyphs to the shared baseline (no-op when gfs === pMax).
@@ -567,6 +750,10 @@ export class LayoutEngine {
             width: charWidth,
             height: gfs,
             style: glyph.style,
+            level: glyph.level,
+            sourceIndex: glyph.sourceIndex,
+            sourceLength: glyph.sourceLength,
+            combining: glyph.combining,
           });
 
           currentX += charWidth;
@@ -574,11 +761,17 @@ export class LayoutEngine {
         }
       }
 
+      commitLine(); // Flush paragraph end visual line
       currentX = 0;
       currentY += lineHeight;
     }
 
-    return { nodes: layoutNodes, totalWidth: maxLineWidth, totalHeight: currentY };
+    return {
+      nodes: layoutNodes,
+      totalWidth: maxLineWidth,
+      totalHeight: currentY,
+      fallbackToCanvas: prepared.fallbackToCanvas,
+    };
   }
 
   /**
