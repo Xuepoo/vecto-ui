@@ -20,6 +20,32 @@ export interface RichTextOptions {
   maxWidth?: number;
   /** Style inherited by every run (each run's own style still wins). */
   baseStyle?: TextStyle;
+  /** Color for link runs that don't set their own `color`. Default `'#38bdf8'`. */
+  linkColor?: string;
+  /** Invoked with the `href` when a link run is activated (click / Enter via its shadow `<a>`). */
+  onLinkClick?: (href: string) => void;
+}
+
+/**
+ * A transparent, interactive hotspot over a link run. It renders nothing (the
+ * {@link RichText} draws the underlined text); it exists so the a11y/automation
+ * layer projects a real `<a href>` an agent or screen-reader can find and click,
+ * and so a canvas click routes to {@link RichTextOptions.onLinkClick}.
+ */
+class LinkHotspot extends UIComponent {
+  public href: string;
+  constructor(href: string, onClick?: (href: string) => void) {
+    super();
+    this.href = href;
+    this.interactive = true;
+    this.on('click', () => onClick?.(this.href));
+  }
+  public getA11yAttributes(): A11yAttributes {
+    return { tag: 'a', href: this.href, label: this.href };
+  }
+  public render(): void {
+    /* invisible — RichText paints the text */
+  }
 }
 
 /** Extract the family portion of a CSS font shorthand (drops a leading `<n>px`). */
@@ -72,10 +98,15 @@ export class RichText extends UIComponent {
   public color: string;
   public maxWidth?: number;
 
+  public linkColor: string;
+
   private engine: LayoutEngine;
   private baseFontSize: number;
   private baseStyle?: TextStyle;
   private result: LayoutResult;
+  private onLinkClick?: (href: string) => void;
+  /** One transparent `<a>` hotspot child per link run (kept in sync with layout). */
+  private hotspots: LinkHotspot[] = [];
 
   constructor(spans: StyledSpan[], opts: RichTextOptions = {}) {
     super();
@@ -84,6 +115,8 @@ export class RichText extends UIComponent {
     this.color = opts.color ?? '#e2e8f0';
     this.maxWidth = opts.maxWidth;
     this.baseStyle = opts.baseStyle;
+    this.linkColor = opts.linkColor ?? '#38bdf8';
+    this.onLinkClick = opts.onLinkClick;
     this.baseFontSize = fontSizePx(this.font);
     this.engine = new LayoutEngine(this.maxWidth ?? 1e9, 1e9, baseMeasurer(this.font));
     this.interactive = true;
@@ -110,7 +143,68 @@ export class RichText extends UIComponent {
     const result = this.engine.layoutPrepared(prepared);
     this.width = result.totalWidth;
     this.height = result.totalHeight;
+    this.result = result;
+    this.syncHotspots();
     return result;
+  }
+
+  /** One box per contiguous link run, sized to its first wrapped line. */
+  private computeLinks(): Array<{
+    href: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> {
+    const out: Array<{ href: string; x: number; y: number; width: number; height: number }> = [];
+    const nodes = this.result.nodes;
+    let i = 0;
+    while (i < nodes.length) {
+      const href = nodes[i].style?.href;
+      if (!href) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j < nodes.length && nodes[j].style?.href === href) j++;
+      const run = nodes.slice(i, j);
+      const y0 = Math.min(...run.map((n) => n.y));
+      const firstLine = run.filter((n) => n.y === y0);
+      const x = Math.min(...firstLine.map((n) => n.x));
+      const right = Math.max(...firstLine.map((n) => n.x + n.width));
+      const height = Math.max(...firstLine.map((n) => n.height));
+      out.push({ href, x, y: y0, width: right - x, height });
+      i = j;
+    }
+    return out;
+  }
+
+  /**
+   * Reconcile the `<a>` hotspot children with the current link runs. Stable
+   * across re-wrap (one hotspot per run), so positions update in place; only a
+   * change in link *count* rebuilds (pruning old shadow nodes via the scene).
+   */
+  private syncHotspots(): void {
+    const links = this.computeLinks();
+    if (links.length !== this.hotspots.length) {
+      for (const old of this.hotspots) {
+        this.remove(old);
+        this.scene?.detachA11y(old);
+      }
+      this.hotspots = links.map((l) => {
+        const h = new LinkHotspot(l.href, this.onLinkClick);
+        this.add(h);
+        return h;
+      });
+    }
+    for (let k = 0; k < links.length; k++) {
+      const l = links[k];
+      const h = this.hotspots[k];
+      h.href = l.href;
+      h.setPosition(l.x, l.y);
+      h.width = l.width;
+      h.height = l.height;
+    }
   }
 
   /** The full text content, used as the accessible name. */
@@ -134,9 +228,17 @@ export class RichText extends UIComponent {
       if (node.char.trim().length === 0) continue;
       const size = node.height;
       const font = this.nodeFont(node.style, size);
-      const color = node.style?.color ?? this.color;
-      // `node.y` is the glyph's top; fillText's y is the baseline (~0.8 down).
-      r.fillText(node.char, node.x, node.y + size * 0.8, font, color);
+      const isLink = !!node.style?.href;
+      const color = node.style?.color ?? (isLink ? this.linkColor : this.color);
+      const baseline = node.y + size * 0.8; // node.y is the top; fillText y is the baseline
+      r.fillText(node.char, node.x, baseline, font, color);
+      if (isLink) {
+        const uy = baseline + 2;
+        r.beginPath();
+        r.moveTo(node.x, uy);
+        r.lineTo(node.x + node.width, uy);
+        r.stroke(color, 1);
+      }
     }
   }
 }
