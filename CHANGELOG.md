@@ -11,6 +11,13 @@ This file keeps a curated, high-level history. Versioning follows
 
 ## Highlights
 
+### core 0.7.1 · three 0.2.0 (unreleased)
+
+WebGL/Three.js 3D space UI adapter integration and custom viewport control.
+
+- **3D Space UI Adapter (`@vecto-ui/three`)** — Bridges VectoUI's 2D layout/component system into Three.js 3D/WebXR. Features dynamic `CanvasTexture` update intercepting, universal 3D-to-2D raycast event translation, multi-pointer WebXR state tracking, event routing to transparent DOM overlays, hover transition boundaries, and clean resource disposal.
+- **Offscreen Canvas & Custom Viewports** — Added `disableWindowResize` to `SceneOptions` and exposed a manual `Scene.resize(width, height)` API, allowing Vecto core to run on custom-sized canvas texture layers without window listener interference.
+
 ### core 0.6.0 · ui 0.3.0 (unreleased)
 
 Rich typography, GPU text, and a leaner repo.
