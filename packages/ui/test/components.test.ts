@@ -466,9 +466,9 @@ describe('Markdown', () => {
     const md = new Markdown('```\nconst a = 1;\n```\n- item 1\n- item 2', { maxWidth: 400 });
     expect(md.content.children.length).toBe(2); // code block container, list
 
-    // Code block is now a Stack container (bg + lines stack)
-    const codeBlock = md.content.children[0] as Stack;
-    expect(codeBlock.children.length).toBeGreaterThanOrEqual(1);
+    // CodeBlock is a single leaf entity (no child sub-tree)
+    const codeBlock = md.content.children[0];
+    expect(codeBlock.children.length).toBe(0);
 
     const list = md.content.children[1] as Stack;
     expect(list.children.length).toBe(2);

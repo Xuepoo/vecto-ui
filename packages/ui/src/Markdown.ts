@@ -1,5 +1,6 @@
 import { Entity, IRenderer } from '@vecto-ui/core';
 import { marked, type Token, type Tokens } from 'marked';
+import { measureText } from './measure';
 import { Stack } from './Stack';
 import { Text } from './Text';
 import { UIComponent } from './UIComponent';
@@ -45,27 +46,6 @@ const DEFAULT_THEME: Required<MarkdownTheme> = {
 
 // ── Helper entities ──────────────────────────────────────────────────────────
 
-/** A filled rounded-rect card (used as code-block background). */
-class RoundedRect extends Entity {
-  color: string;
-  radius: number;
-  constructor(w: number, h: number, color: string, radius: number = 8) {
-    super();
-    this.width = w;
-    this.height = h;
-    this.color = color;
-    this.radius = radius;
-  }
-  isPointInside(): boolean {
-    return false;
-  }
-  render(r: IRenderer): void {
-    r.beginPath();
-    r.roundRect(0, 0, this.width, this.height, this.radius);
-    r.fill(this.color);
-  }
-}
-
 /** A thin horizontal line (for `<hr>`). */
 class HorizontalRule extends Entity {
   color: string;
@@ -103,14 +83,6 @@ class QuoteBorder extends Entity {
     r.roundRect(0, 0, this.width, this.height, 2);
     r.fill(this.color);
   }
-}
-
-/** A plain structural container for grouping entities without applying layout rules. */
-class Container extends UIComponent {
-  constructor(name?: string) {
-    super(name);
-  }
-  render(_r: IRenderer): void {}
 }
 
 // ── Code block with syntax-keyword highlighting ─────────────────────────────
@@ -376,6 +348,73 @@ function highlightLine(line: string, lang: string, theme: Required<MarkdownTheme
   return segments;
 }
 
+// ── Single CodeBlock entity ─────────────────────────────────────────────────
+
+/**
+ * A single self-rendering entity for fenced code blocks.
+ *
+ * Replaces the old N×M child-entity explosion (Container → Stack → Text per
+ * segment per line) with a flat leaf that draws its own background + text.
+ */
+export class CodeBlock extends UIComponent {
+  private lines: CodeSegment[][];
+  private widths: number[][];
+  private lang: string;
+  private theme: Required<MarkdownTheme>;
+  private lineH = 20;
+  private pad = 16;
+  private codeFont: string;
+
+  constructor(code: string, lang: string, maxWidth: number, theme: Required<MarkdownTheme>) {
+    super();
+    this.lang = lang;
+    this.theme = theme;
+    this.codeFont = `14px ${theme.codeFont}`;
+    this.lines = [];
+    this.widths = [];
+    this.width = maxWidth;
+    this.buildLines(code);
+  }
+
+  /** Re-parse code content (e.g. for live editing). */
+  setCode(code: string, lang?: string): this {
+    if (lang !== undefined) this.lang = lang;
+    this.buildLines(code);
+    return this;
+  }
+
+  private buildLines(code: string): void {
+    const rawLines = code.split('\n');
+    this.lines = rawLines.map((l) => highlightLine(l, this.lang, this.theme));
+    this.widths = this.lines.map((segs) => segs.map((seg) => measureText(seg.text, this.codeFont)));
+    this.height = this.pad * 2 + rawLines.length * this.lineH;
+  }
+
+  /** Code blocks are decorative — not interactive. */
+  isPointInside(): boolean {
+    return false;
+  }
+
+  render(r: IRenderer): void {
+    // Background
+    r.beginPath();
+    r.roundRect(0, 0, this.width, this.height, 8);
+    r.fill(this.theme.codeBgColor);
+
+    // Text lines
+    for (let row = 0; row < this.lines.length; row++) {
+      const segs = this.lines[row];
+      const ws = this.widths[row];
+      let xOff = this.pad;
+      const yBaseline = this.pad + row * this.lineH + this.lineH * 0.75;
+      for (let col = 0; col < segs.length; col++) {
+        r.fillText(segs[col].text, xOff, yBaseline, this.codeFont, segs[col].color);
+        xOff += ws[col];
+      }
+    }
+  }
+}
+
 // ── Inline token → Text entities ─────────────────────────────────────────────
 
 /** Parse inline markdown tokens and produce Text entities on a Stack line. */
@@ -474,57 +513,7 @@ export class Markdown extends UIComponent {
       case 'code': {
         const codeToken = token as Tokens.Code;
         const lang = (codeToken.lang ?? '').toLowerCase();
-        const pad = 16;
-        const lineH = 20;
-        const codeFont = `14px ${t.codeFont}`;
-        const lines = codeToken.text.split('\n');
-
-        // Container for code block (plain Container, no automatic layout)
-        const codeContainer = new Container('CodeContainer');
-
-        // Render each line with syntax highlighting
-        const linesContainer = new Stack({ direction: 'vertical', gap: 0 });
-
-        for (const line of lines) {
-          const segments = highlightLine(line, lang, t);
-          const lineRow = new Stack({ direction: 'horizontal', gap: 0 });
-          if (!line.trim()) {
-            lineRow.add(
-              new Text(line || ' ', {
-                font: codeFont,
-                color: t.codeColor,
-                preserveLeadingSpaces: true,
-              }),
-            );
-          } else {
-            for (const seg of segments) {
-              lineRow.add(
-                new Text(seg.text, {
-                  font: codeFont,
-                  color: seg.color,
-                  preserveLeadingSpaces: true,
-                }),
-              );
-            }
-          }
-          lineRow.height = lineH;
-          linesContainer.add(lineRow);
-        }
-
-        const bgHeight = linesContainer.height + pad * 2;
-        const bg = new RoundedRect(this.maxWidth, bgHeight, t.codeBgColor, 8);
-        bg.x = 0;
-        bg.y = 0;
-        codeContainer.add(bg);
-
-        linesContainer.x = pad;
-        linesContainer.y = pad;
-        codeContainer.add(linesContainer);
-
-        codeContainer.width = this.maxWidth;
-        codeContainer.height = bgHeight;
-
-        return codeContainer;
+        return new CodeBlock(codeToken.text, lang, this.maxWidth, t);
       }
 
       // ── Blockquotes ──────────────────────────────────────────────────

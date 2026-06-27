@@ -20,9 +20,9 @@ describe('Markdown', () => {
     const code = '```js\nconst x = 1;\nconsole.log(x);\n```';
     const md = new Markdown(code);
     expect(md.content.children.length).toBeGreaterThanOrEqual(1);
-    // The code block should be a container with children (bg + lines)
+    // CodeBlock is a single leaf entity — no child sub-tree
     const codeBlock = md.content.children[0];
-    expect(codeBlock.children.length).toBeGreaterThanOrEqual(1);
+    expect(codeBlock.children.length).toBe(0);
   });
 
   it('renders unordered lists with bullets', () => {
@@ -68,6 +68,16 @@ describe('Markdown', () => {
   it('accepts custom maxWidth', () => {
     const md = new Markdown('Hello', { maxWidth: 400 });
     expect(md.maxWidth).toBe(400);
+  });
+
+  it('renders code blocks as a single CodeBlock entity (not N×M children)', () => {
+    const code = '```js\nconst x = 1;\nlet y = 2;\nreturn x + y;\n```';
+    const md = new Markdown(code);
+    const codeBlock = md.content.children[0];
+    // Should be a single entity, not a Container with nested Stacks
+    expect(codeBlock.children.length).toBe(0); // No sub-entities
+    expect(codeBlock.height).toBeGreaterThan(0);
+    expect(codeBlock.width).toBeGreaterThan(0);
   });
 
   it('handles complex markdown without throwing', () => {
