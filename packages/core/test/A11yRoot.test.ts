@@ -61,7 +61,8 @@ describe('A11y Root and Agent Contract', () => {
     canvas.width = 800;
     canvas.height = 600;
     document.body.appendChild(canvas);
-    scene = new Scene(canvas);
+    scene = new Scene(canvas, { maxFPS: 0 });
+    scene.renderMode = 'always';
   });
 
   afterEach(() => {

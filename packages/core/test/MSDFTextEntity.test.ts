@@ -84,6 +84,7 @@ test('MSDFTextEntity WebGL rendering under rotation', () => {
       addGlyph: mockAddGlyph,
     },
     glCanvas: {},
+    markDirty: vi.fn(),
   };
 
   entity.render(null);
