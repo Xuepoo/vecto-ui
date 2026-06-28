@@ -1023,6 +1023,7 @@ export class Scene {
       return;
     }
 
+    this.dirty = false;
     this.render(this.renderer, dt, time);
 
     // Sync Automation Shadow DOM (skip the whole walk when nothing is interactive).
@@ -1051,8 +1052,6 @@ export class Scene {
         this.a11yPendingSyncAfterAnimation = false;
       }
     }
-
-    this.dirty = false;
 
     this.scheduleFrame();
   }
