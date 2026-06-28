@@ -68,7 +68,8 @@ function sceneWithRecorder() {
   // Force this canvas to hand back our recorder.
   (canvas as HTMLCanvasElement).getContext = (() => ctx) as never;
   ctx.canvas = canvas;
-  const scene = new Scene(canvas);
+  const scene = new Scene(canvas, { maxFPS: 0 });
+  scene.renderMode = 'always';
   (globalThis as { requestAnimationFrame?: unknown }).requestAnimationFrame = () => 0;
   (scene as unknown as { isRunning: boolean }).isRunning = true;
   return { scene, ctx };

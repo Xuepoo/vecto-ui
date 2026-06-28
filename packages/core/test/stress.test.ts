@@ -34,7 +34,8 @@ function makeScene(): { scene: Scene; host: HTMLElement; tick: (n?: number) => v
   const canvas = document.createElement('canvas');
   host.appendChild(canvas);
   document.body.appendChild(host);
-  const scene = new Scene(canvas);
+  const scene = new Scene(canvas, { maxFPS: 0 });
+  scene.renderMode = 'always';
   (scene as unknown as { isRunning: boolean }).isRunning = true; // let loop() run without scheduling
   const tick = (n = 1) => {
     for (let i = 0; i < n; i++) (scene as unknown as { loop: (t: number) => void }).loop(i * 16);

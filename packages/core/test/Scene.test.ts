@@ -333,7 +333,8 @@ describe('Scene render loop: culling, onDemand, a11y early-out', () => {
     const parentDiv = document.createElement('div');
     const canvas = document.createElement('canvas');
     parentDiv.appendChild(canvas);
-    const scene = new Scene(canvas); // window mock: 800x600 viewport
+    const scene = new Scene(canvas, { maxFPS: 0 }); // window mock: 800x600 viewport
+    scene.renderMode = 'always';
     (scene as any).isRunning = true; // allow loop() to run without scheduling
     return scene;
   }
@@ -639,7 +640,8 @@ describe('Scene maxFPS / prefers-reduced-motion (power saving)', () => {
     const parentDiv = document.createElement('div');
     const canvas = document.createElement('canvas');
     parentDiv.appendChild(canvas);
-    const scene = new Scene(canvas);
+    const scene = new Scene(canvas, { maxFPS: 0 });
+    scene.renderMode = 'always';
     (scene as any).isRunning = true;
     const spy = new SpyEntity('spy');
     scene.add(spy);
@@ -703,7 +705,8 @@ describe('Scene maxFPS / prefers-reduced-motion (power saving)', () => {
       const parentDiv = document.createElement('div');
       const canvas = document.createElement('canvas');
       parentDiv.appendChild(canvas);
-      const scene = new Scene(canvas, { respectReducedMotion: false });
+      const scene = new Scene(canvas, { respectReducedMotion: false, maxFPS: 0 });
+      scene.renderMode = 'always';
       (scene as any).isRunning = true;
       const spy = new SpyEntity('spy');
       scene.add(spy);
