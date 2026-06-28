@@ -124,7 +124,7 @@ export class RichText extends UIComponent {
     this.exclusions = opts.exclusions;
     this.baseFontSize = fontSizePx(this.font);
     this.engine = new LayoutEngine(this.maxWidth ?? 1e9, 1e9, baseMeasurer(this.font));
-    this.interactive = true;
+    this.interactive = false;
     this.result = this.layout();
   }
 
