@@ -37,6 +37,7 @@ export class ScrollView extends UIComponent {
     super.add(this.content);
 
     this.on('wheel', (e: WheelEvent) => {
+      if (e.ctrlKey) return; // Allow browser zoom (Ctrl+wheel)
       e.preventDefault();
       this.targetY -= e.deltaY;
       this.clampTarget();
