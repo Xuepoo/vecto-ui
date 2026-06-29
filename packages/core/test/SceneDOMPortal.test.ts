@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { Scene } from '../src/tree/Scene';
-import { DOMPortalEntity } from '../src/tree/DOMPortalEntity';
+import { Scene, DOMPortalEntity } from '../src';
 
 // Scene requires a real canvas context, so we mock JSDOM's canvas getContext
 const mockCtx = {

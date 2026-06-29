@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { Scene } from '../src/tree/Scene';
-import { Entity, VectoUIEvent, type A11yAttributes } from '../src/tree/Entity';
+import { Scene, Entity, VectoUIEvent, type A11yAttributes } from '../src';
 
 /**
  * Stress / load suite: drive the engine at the scale and churn its docs claim it
