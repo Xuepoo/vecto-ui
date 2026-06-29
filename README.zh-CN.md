@@ -42,21 +42,6 @@ scene.add(new CircleEntity().setPosition(100, 100));
 scene.start();
 ```
 
-## 性能实测
-
-诚实、可复现,不做杜撰对比。用 `bun run benchmark` 复现(headless Chrome、Canvas 2D、简单填充圆形实体)。默认 vsync 受限(CI/sandbox 安全);加 `--uncapped` 得到下表的真实每帧成本。数值与机器及实体复杂度相关。
-
-| 实体数  | 全部在屏       | 多数在屏外(culling)   | 静止空闲(`onDemand`) |
-| ------- | -------------- | --------------------- | -------------------- |
-| 1,000   | ~4 ms(240 fps) | ~2.4 ms(410 fps)      | ~0(帧成本 ⟂ N)       |
-| 10,000  | ~19 ms(52 fps) | **~16 ms(63 fps ✅)** | ~0(帧成本 ⟂ N)       |
-| 100,000 | ~156 ms(6 fps) | ~137 ms(7 fps)        | **~0(帧成本 ⟂ N)**   |
-
-- **视口 culling**(每实体 `getBounds()`):屏外实体跳过,10k 屏外场景稳定 60 FPS。
-- **按需重绘**(`scene.renderMode = 'onDemand'` + `markDirty()`):静止场景渲染一次后空闲,无变化时 100k 实体与空场景同价。
-- **WebGL2 点层**(`new Scene(canvas, { pointBackend: 'webgl' })`):批量圆形单次 draw call;100k 点 7→25 fps(软件 GL)。
-- 完整测试维度见英文 [README](./README.md#testing--quality)。
-
 ## 包
 
 | 包                | 状态   | 说明                                                                                                                                      |

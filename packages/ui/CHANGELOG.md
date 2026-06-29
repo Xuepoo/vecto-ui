@@ -1,5 +1,13 @@
 # @vecto-ui/ui
 
+## 0.4.1
+
+### Patch Changes
+
+- Fix WebGPU particle vertex storage binding and align CPU/GPU spring limits. Adjust Scene maxFPS to default to 60 with idle auto-throttling. Fix ScrollView stability and expose public scroll APIs. Add GFM Table support to Markdown component. Adjust UI peerDependencies.
+- Updated dependencies
+  - @vecto-ui/core@0.9.1
+
 ## 0.4.0
 
 ### Minor Changes

@@ -27,36 +27,6 @@ positioned over the canvas. So a pure-canvas page is:
 It grew out of [vectomancy](https://vectomancy.xuepoo.xyz) (image/text/video → math equations)
 and [xuepoo.xyz](https://xuepoo.xyz) (a near-Zero-DOM site whose `<body>` is one interactive canvas).
 
-## Measured performance
-
-Honest, reproducible numbers — no fabricated comparisons. Reproduce the entity benchmark with
-`bun run benchmark` (headless Chrome, Canvas 2D, simple filled-circle entities). It runs vsync-capped
-by default (CI/sandbox-safe; reports whether N sustains 60 fps); add `--uncapped` for the true
-sub-16 ms per-frame cost in the table below. Numbers are per-machine and complexity-dependent.
-
-| Entities | all on-screen   | mostly off-screen (culled) | static, idle (`onDemand`) |
-| -------- | --------------- | -------------------------- | ------------------------- |
-| 1,000    | ~4 ms (240 fps) | ~2.4 ms (410 fps)          | ~0 (frame cost ⟂ N)       |
-| 10,000   | ~19 ms (52 fps) | **~16 ms (63 fps ✅)**     | ~0 (frame cost ⟂ N)       |
-| 100,000  | ~156 ms (6 fps) | ~137 ms (7 fps)            | **~0 (frame cost ⟂ N)**   |
-
-- **Viewport culling** (`getBounds()` per entity): off-screen entities are skipped — a 10k
-  off-screen-heavy scene holds 60 FPS.
-- **On-demand redraw** (`scene.renderMode = 'onDemand'` + `markDirty()`): a static scene renders
-  once then idles, so a 100k-entity UI costs the same as an empty one when nothing changes.
-- **WebGL2 point layer** (`new Scene(canvas, { pointBackend: 'webgl' })`): batch-circle entities
-  render in one draw call — 100k points 7→25 fps (software GL); 1M feasible.
-- **WebGPU compute particle layer** (`ComputeParticleEntity`): simulates 1,000,000+ interactive particles entirely on the GPU via WGSL compute shaders, achieving zero-copy procedural quad rendering and 3-stage exponential backoff context recovery.
-- **Cold/hot text layout**: `LayoutEngine.prepare()` measures once; `layoutPrepared()` re-wraps on
-  resize with no re-measurement — ~3.5× faster reflow.
-- **vs DOM** (`bun run compare:dom`, CDP metrics): VectoUI keeps a flat ~29 DOM nodes with **0
-  layout / 0 style-recalc** while animating 62 glyphs at 60 fps — **a single initial layout and
-  zero reflow during interaction**, where the DOM equivalent thrashes layout every frame.
-
-> Not magic everywhere: 100k entities _fully on-screen_ in Canvas 2D is ~6 fps (per-draw-call
-> bound — use the WebGL layer). And document-style, selectable, SEO-heavy text is the DOM's home
-> turf. See [where it fits](#where-it-fits) below.
-
 ## Packages
 
 | Package           | Status | Description                                                                                                                                                                                                                       |
