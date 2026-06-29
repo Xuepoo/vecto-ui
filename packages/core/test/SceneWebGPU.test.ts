@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Scene } from '../src/tree/Scene';
-import { ComputeParticleEntity } from '../src/tree/ComputeParticleEntity';
+import { Scene, ComputeParticleEntity } from '../src';
 
 function recorderCtx() {
   const calls: string[] = [];

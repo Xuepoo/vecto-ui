@@ -40,9 +40,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
 };
-
-import { Scene } from '../src/tree/Scene';
-import { Entity } from '../src/tree/Entity';
+import { Scene, Entity } from '../src';
 
 // Entity is abstract; use a minimal concrete subclass for tests.
 class TestEntity extends Entity {
