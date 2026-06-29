@@ -61,7 +61,8 @@ bun run test
 
 ## 3. Agent Rules & Constraints
 
-1. **Invoke Binaries Directly**: Always run globally installed tools (`prettier`, `oxlint`, `changeset`) directly. Do **not** prefix with `bunx` or `npx`.
-2. **Preserve Documentation**: Retain all docstrings, comments, and typings unless they are directly contradicted by your code changes.
-3. **Changesets**: Any public-facing package modification must be accompanied by a changeset. Run `changeset` to generate the version bump markdown.
-4. **No Pollution**: Do not write temporary files or scratchpads into the package directories. Use the workspace root `tmp/` for scratch files.
+1. **Workspace Boundary**: Do not access locations outside the workspace; always remain within `/mnt/data/Workspace/Projects/vecto` while working.
+2. **Invoke Binaries Directly**: Always run globally installed tools (`prettier`, `oxlint`, `changeset`) directly. Do **not** prefix with `bunx` or `npx`.
+3. **Preserve Documentation**: Retain all docstrings, comments, and typings unless they are directly contradicted by your code changes.
+4. **Changesets**: Any public-facing package modification must be accompanied by a changeset. Run `changeset` to generate the version bump markdown.
+5. **No Pollution**: Do not write temporary files or scratchpads into the package directories. Use the workspace root `tmp/` for scratch files.
