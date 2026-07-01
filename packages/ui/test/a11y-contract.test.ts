@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { Scene } from '@vecto-ui/core';
+import { Scene } from '@vectojs/core';
 import { Button, Link, Image, Checkbox, Toggle, Input } from '../src';
 
 /**
  * Accessibility / automation contract suite.
  *
- * VectoUI's differentiator is that every interactive entity projects a real,
+ * VectoJS's differentiator is that every interactive entity projects a real,
  * operable DOM shadow node — so assistive tech AND automation agents
  * (Playwright, AI agents) can read its role/name/state and drive it by the same
  * affordances a user has (click, Enter/Space). This suite pins that contract:

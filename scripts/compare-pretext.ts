@@ -1,5 +1,5 @@
 /**
- * Vecto-UI LayoutEngine vs pretext — text-layout accuracy & throughput comparison.
+ * VectoJS LayoutEngine vs pretext — text-layout accuracy & throughput comparison.
  *
  * Runs in headless Chrome (global Playwright + system google-chrome-stable). For
  * each corpus/font it establishes a browser-truth line count via the real DOM
@@ -9,7 +9,7 @@
  *   - vecto + atlas      LayoutEngine fed real measureText widths
  * reporting line-count error vs DOM truth and layout throughput.
  *
- * vecto-ui core and pretext are bundled to browser IIFE via Bun.build (no vite,
+ * vectojs core and pretext are bundled to browser IIFE via Bun.build (no vite,
  * no deps) and injected. Corpora come from the local pretext checkout.
  *
  * Usage:  bun run scripts/compare-pretext.ts

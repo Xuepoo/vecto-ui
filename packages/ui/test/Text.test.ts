@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { IRenderer } from '@vecto-ui/core';
+import type { IRenderer } from '@vectojs/core';
 import { Text } from '../src/Text';
 
 /** Records every fillText call (Text draws one call per visual line). */

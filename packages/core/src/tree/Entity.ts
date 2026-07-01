@@ -125,7 +125,7 @@ export interface ListenerOptions {
  * `clientX`, `key`, …) and `preventDefault()` pass through to `nativeEvent`, so
  * handlers written against the raw DOM event keep working.
  */
-export class VectoUIEvent<N = unknown> {
+export class VectoJSEvent<N = unknown> {
   /** The event name. */
   readonly type: VectoEvent;
   /** The entity the event originated on. */
@@ -465,7 +465,7 @@ export abstract class Entity {
   private fireListeners(
     node: Entity,
     map: Map<VectoEvent, Array<(e: any) => void>>,
-    event: VectoUIEvent,
+    event: VectoJSEvent,
   ): void {
     const handlers = map.get(event.type);
     if (!handlers) return;
@@ -478,7 +478,7 @@ export abstract class Entity {
   }
 
   /**
-   * Dispatch a {@link VectoUIEvent} through the entity tree, DOM-style: a capture
+   * Dispatch a {@link VectoJSEvent} through the entity tree, DOM-style: a capture
    * phase from the root down to `event.target`, then a bubble phase back up to the
    * root. `event.stopPropagation()` halts the walk; `stopImmediatePropagation()`
    * also skips the remaining listeners on the current node. A non-bubbling event
@@ -486,7 +486,7 @@ export abstract class Entity {
    *
    * @param event - The event to propagate (its `target` defines the path).
    */
-  public dispatchEvent(event: VectoUIEvent): void {
+  public dispatchEvent(event: VectoJSEvent): void {
     // Build the path target → root.
     const path: Entity[] = [];
     for (let n: Entity | null = event.target; n; n = n.parent) path.push(n);

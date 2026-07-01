@@ -1,4 +1,4 @@
-import { Entity, VectoUIEvent } from '@vecto-ui/core';
+import { Entity, VectoJSEvent } from '@vectojs/core';
 import { UIComponent } from './UIComponent';
 import { Button } from './Button';
 import { Stack } from './Stack';
@@ -122,7 +122,7 @@ export class Dropdown extends UIComponent {
     backdrop.interactive = true;
 
     // Stop clicks outside from reaching underlying controls
-    backdrop.on('click', (e: VectoUIEvent) => {
+    backdrop.on('click', (e: VectoJSEvent) => {
       e.stopPropagation();
       this.closeMenu();
     });
@@ -159,7 +159,7 @@ export class Dropdown extends UIComponent {
         selected: opt === this.selectedValue,
       });
 
-      item.on('click', (e: VectoUIEvent) => {
+      item.on('click', (e: VectoJSEvent) => {
         e.stopPropagation();
         this.selectOption(opt);
       });

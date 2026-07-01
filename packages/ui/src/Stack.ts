@@ -1,4 +1,4 @@
-import { Entity, IRenderer } from '@vecto-ui/core';
+import { Entity, IRenderer } from '@vectojs/core';
 import { UIComponent } from './UIComponent';
 
 /** Construction options for {@link Stack}. */

@@ -1,4 +1,4 @@
-import { Scene, Entity, type IRenderer } from '@vecto-ui/core';
+import { Scene, Entity, type IRenderer } from '@vectojs/core';
 
 /**
  * Headless rendering benchmark page.

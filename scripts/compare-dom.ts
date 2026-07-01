@@ -1,5 +1,5 @@
 /**
- * VectoUI (single canvas) vs traditional DOM — CPU & memory comparison.
+ * VectoJS (single canvas) vs traditional DOM — CPU & memory comparison.
  *
  * Spins up the demo Vite dev server, drives `compare.html` in headless Chrome for
  * both modes across several N, and reads authoritative browser-side metrics via

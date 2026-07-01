@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { Scene } from '@vecto-ui/core';
+import { Scene } from '@vectojs/core';
 import { TextArea, wrapText } from '../src/TextArea';
 
 /** Deterministic measurer: every character is 1 unit wide. */

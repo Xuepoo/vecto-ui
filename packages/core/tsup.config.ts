@@ -11,5 +11,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   splitting: true,
-  external: ['@vecto-ui/core'],
+  external: ['@vectojs/core'],
 });

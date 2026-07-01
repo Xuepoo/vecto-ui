@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Table } from '../src/Table';
-import { Scene } from '@vecto-ui/core';
+import { Scene } from '@vectojs/core';
 
 describe('Table', () => {
   beforeEach(() => {

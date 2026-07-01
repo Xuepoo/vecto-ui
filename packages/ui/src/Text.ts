@@ -4,7 +4,7 @@ import {
   LayoutEngine,
   type GlyphMeasurer,
   type PreparedText,
-} from '@vecto-ui/core';
+} from '@vectojs/core';
 import { UIComponent } from './UIComponent';
 import { fontSizePx } from './measure';
 

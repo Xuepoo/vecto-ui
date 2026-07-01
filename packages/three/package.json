@@ -1,7 +1,10 @@
 {
-  "name": "@vecto-ui/three",
-  "version": "0.2.0",
-  "description": "WebGL/Three.js rendering backend for VectoUI",
+  "name": "@vectojs/three",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "WebGL/Three.js rendering backend for VectoJS",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -16,14 +19,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean"
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "test": "vitest run"
   },
   "peerDependencies": {
-    "@vecto-ui/core": ">=0.9.2",
+    "@vectojs/core": ">=0.1.0",
     "three": "^0.160.0"
   },
   "devDependencies": {
-    "@vecto-ui/core": "workspace:*",
+    "@vectojs/core": "workspace:*",
     "@types/three": "^0.160.0",
     "tsup": "^8.3.5",
     "vitest": "^4.1.9"

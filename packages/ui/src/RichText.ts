@@ -7,7 +7,7 @@ import {
   type LayoutResult,
   type StyledSpan,
   type TextStyle,
-} from '@vecto-ui/core';
+} from '@vectojs/core';
 import { UIComponent } from './UIComponent';
 import { fontSizePx } from './measure';
 

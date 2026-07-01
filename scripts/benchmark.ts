@@ -1,7 +1,7 @@
 /**
- * Vecto-UI rendering benchmark driver.
+ * VectoJS rendering benchmark driver.
  *
- * Bundles the demo `bench.ts` entry with Bun.build (resolving `@vecto-ui/core`
+ * Bundles the demo `bench.ts` entry with Bun.build (resolving `@vectojs/core`
  * to its TS source), serves it from an in-process Bun.serve, opens it in a
  * headless Chrome (via the globally-installed Playwright + the system
  * google-chrome-stable, with frame-rate limiting disabled), renders N entities
@@ -63,7 +63,7 @@ async function buildBench(): Promise<string> {
       {
         name: 'vecto-core-src',
         setup(b) {
-          b.onResolve({ filter: /^@vecto-ui\/core$/ }, () => ({ path: CORE_SRC }));
+          b.onResolve({ filter: /^@vectojs\/core$/ }, () => ({ path: CORE_SRC }));
         },
       },
     ],

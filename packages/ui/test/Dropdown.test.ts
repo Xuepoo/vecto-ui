@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Dropdown } from '../src/Dropdown';
-import { Scene } from '@vecto-ui/core';
+import { Scene } from '@vectojs/core';
 
 describe('Dropdown', () => {
   beforeEach(() => {
