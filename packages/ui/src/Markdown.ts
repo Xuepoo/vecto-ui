@@ -1,4 +1,4 @@
-import { Entity, IRenderer, type StyledSpan, type TextStyle } from '@vecto-ui/core';
+import { Entity, IRenderer, type StyledSpan, type TextStyle } from '@vectojs/core';
 import { marked, type Token, type Tokens } from 'marked';
 import { measureText } from './measure';
 import { RichText } from './RichText';
@@ -533,7 +533,7 @@ export interface MarkdownOptions {
 }
 
 /**
- * Renders Markdown content into a VectoUI entity tree using {@link marked}.
+ * Renders Markdown content into a VectoJS entity tree using {@link marked}.
  *
  * Supported token types:
  * - **Headings** (h1–h6) with scaled font sizes

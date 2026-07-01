@@ -2,7 +2,7 @@ import { UIComponent } from './UIComponent';
 import { Card } from './Card';
 import { Text } from './Text';
 import { Button } from './Button';
-import { SpringPhysics, type IRenderer, VectoUIEvent } from '@vecto-ui/core';
+import { SpringPhysics, type IRenderer, VectoJSEvent } from '@vectojs/core';
 
 export class Modal extends UIComponent {
   private card: Card;
@@ -47,7 +47,7 @@ export class Modal extends UIComponent {
     });
     closeBtn.width = 80;
     closeBtn.height = 36;
-    closeBtn.on('click', (e: VectoUIEvent) => {
+    closeBtn.on('click', (e: VectoJSEvent) => {
       e.stopPropagation();
       this.close();
     });
@@ -56,8 +56,8 @@ export class Modal extends UIComponent {
     this.add(this.card);
 
     // Block underlying events
-    this.on('click', (e: VectoUIEvent) => e.stopPropagation());
-    this.on('pointerdown', (e: VectoUIEvent) => e.stopPropagation());
+    this.on('click', (e: VectoJSEvent) => e.stopPropagation());
+    this.on('pointerdown', (e: VectoJSEvent) => e.stopPropagation());
   }
 
   public close() {

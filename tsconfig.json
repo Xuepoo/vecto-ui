@@ -20,7 +20,7 @@
 
     "baseUrl": ".",
     "paths": {
-      "@vecto-ui/*": ["packages/*/src"]
+      "@vectojs/*": ["packages/*/src"]
     }
   },
 

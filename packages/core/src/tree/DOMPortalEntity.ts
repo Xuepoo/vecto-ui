@@ -1,4 +1,4 @@
-import { Entity, VectoEvent, VectoUIEvent } from './Entity';
+import { Entity, VectoEvent, VectoJSEvent } from './Entity';
 
 export class DOMPortalEntity extends Entity {
   public domElement: HTMLElement;
@@ -43,7 +43,7 @@ export class DOMPortalEntity extends Entity {
       const events: VectoEvent[] = ['click', 'pointerdown', 'pointerup', 'pointermove', 'wheel'];
       for (const type of events) {
         const handler = (e: any) => {
-          this.dispatchEvent(new VectoUIEvent(type, this, e));
+          this.dispatchEvent(new VectoJSEvent(type, this, e));
         };
         this.domElement.addEventListener(type, handler);
         this.domListeners.push({ type, handler, capture: false });
@@ -55,7 +55,7 @@ export class DOMPortalEntity extends Entity {
       ];
       for (const { native, vecto } of hoverEvents) {
         const handler = (e: any) => {
-          this.dispatchEvent(new VectoUIEvent(vecto, this, e, false));
+          this.dispatchEvent(new VectoJSEvent(vecto, this, e, false));
         };
         this.domElement.addEventListener(native, handler);
         this.domListeners.push({ type: native, handler, capture: false });
@@ -64,7 +64,7 @@ export class DOMPortalEntity extends Entity {
       const focusEvents: string[] = ['focus', 'blur'];
       for (const type of focusEvents) {
         const handler = (e: any) => {
-          this.dispatchEvent(new VectoUIEvent(type as VectoEvent, this, e, true));
+          this.dispatchEvent(new VectoJSEvent(type as VectoEvent, this, e, true));
         };
         this.domElement.addEventListener(type, handler, true);
         this.domListeners.push({ type, handler, capture: true });

@@ -1,11 +1,5 @@
 import * as THREE from 'three';
-import {
-  Scene as VectoScene,
-  Entity,
-  VectoUIEvent,
-  SceneOptions,
-  VectoEvent,
-} from '@vecto-ui/core';
+import { Scene as VectoScene, Entity, VectoJSEvent, SceneOptions, VectoEvent } from '@vectojs/core';
 
 export interface ThreeAdapterOptions {
   /** Physical layout width of the 2D UI canvas. */
@@ -25,13 +19,13 @@ interface PointerState {
 }
 
 /**
- * Adapts a VectoUI Scene into a Three.js CanvasTexture, allowing VectoUI
+ * Adapts a VectoJS Scene into a Three.js CanvasTexture, allowing VectoJS
  * components to be rendered in 3D space (e.g. on a plane, screen, or VR dashboard).
  */
 export class ThreeAdapter {
   /** The Three.js CanvasTexture wrapping the offscreen Vecto canvas. */
   public texture: THREE.CanvasTexture;
-  /** The active VectoUI Scene instance. */
+  /** The active VectoJS Scene instance. */
   public vectoScene: VectoScene;
   /** The offscreen HTMLCanvasElement on which Vecto draws. */
   public canvas: HTMLCanvasElement;
@@ -89,7 +83,7 @@ export class ThreeAdapter {
    * @param raycaster Three.js Raycaster instance.
    * @param type Pointer event type: 'pointerdown' | 'pointerup' | 'pointermove' | 'wheel' | 'click'.
    * @param originalEvent Optional original DOM Event to forward scroll deltas or button states.
-   * @returns true if the ray intersected the VectoUI mesh; false otherwise.
+   * @returns true if the ray intersected the VectoJS mesh; false otherwise.
    */
   public updateIntersection(
     raycaster: THREE.Raycaster,
@@ -124,7 +118,7 @@ export class ThreeAdapter {
   }
 
   /**
-   * Dispatches pointer events mapped from UV coordinates [0, 1] to VectoUI entities.
+   * Dispatches pointer events mapped from UV coordinates [0, 1] to VectoJS entities.
    */
   private dispatchAtUv(
     type: VectoEvent,
@@ -205,9 +199,9 @@ export class ThreeAdapter {
         a11yEl.focus();
       }
     } else {
-      // Fallback: bubble the VectoUIEvent up the virtual tree directly
+      // Fallback: bubble the VectoJSEvent up the virtual tree directly
       const e = originalEvent instanceof MouseEvent ? originalEvent : undefined;
-      const vectoEvent = new VectoUIEvent(type, entity, e, type !== 'pointerleave');
+      const vectoEvent = new VectoJSEvent(type, entity, e, type !== 'pointerleave');
       entity.dispatchEvent(vectoEvent);
     }
   }
@@ -264,7 +258,7 @@ export class ThreeAdapter {
   }
 
   /**
-   * Disposes of Three.js textures, geometries, and VectoUI scenes to prevent memory leaks.
+   * Disposes of Three.js textures, geometries, and VectoJS scenes to prevent memory leaks.
    */
   public dispose(): void {
     this.texture.dispose();

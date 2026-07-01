@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@vecto-ui/three"]
+  "ignore": ["@vectojs/three"]
 }

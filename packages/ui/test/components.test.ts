@@ -14,7 +14,7 @@ import {
   Markdown,
   RichText,
 } from '../src/index';
-import { LayoutEngine, type IRenderer } from '@vecto-ui/core';
+import { LayoutEngine, type IRenderer } from '@vectojs/core';
 
 // jsdom has no canvas getContext; measure.ts falls back to its estimate. Stub to
 // keep the test output free of "Not implemented" noise.

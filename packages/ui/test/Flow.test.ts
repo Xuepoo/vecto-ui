@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { Entity } from '@vecto-ui/core';
+import { Entity } from '@vectojs/core';
 import { Stack } from '../src/Stack';
 import { Flow } from '../src/Flow';
 

@@ -1,4 +1,4 @@
-import { IRenderer, parseColorToRGBA } from '@vecto-ui/core';
+import { IRenderer, parseColorToRGBA } from '@vectojs/core';
 import * as THREE from 'three';
 
 export class WebGLGradient {
@@ -85,7 +85,7 @@ class ThreePath {
 /**
  * WebGL/Three.js implementation of {@link IRenderer}.
  *
- * Bridges VectoUI's 2D canvas API to Three.js for 3D hardware-accelerated rendering.
+ * Bridges VectoJS's 2D canvas API to Three.js for 3D hardware-accelerated rendering.
  */
 export class ThreeRenderer implements IRenderer {
   public scene: THREE.Scene;

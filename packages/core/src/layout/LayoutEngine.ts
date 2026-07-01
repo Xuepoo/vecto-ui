@@ -185,7 +185,7 @@ export function computeLineSegments(
 }
 
 /**
- * VectoUI Global Layout Engine (Intl.Segmenter)
+ * VectoJS Global Layout Engine (Intl.Segmenter)
  * Advanced Typography Engine supporting CJK, Emoji, and Western Graphemes
  */
 export class LayoutEngine {

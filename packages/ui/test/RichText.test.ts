@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { IRenderer } from '@vecto-ui/core';
+import type { IRenderer } from '@vectojs/core';
 import { RichText } from '../src/RichText';
 
 interface DrawCall {

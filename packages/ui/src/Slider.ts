@@ -1,5 +1,5 @@
 import { UIComponent } from './UIComponent';
-import { type IRenderer, type A11yAttributes } from '@vecto-ui/core';
+import { type IRenderer, type A11yAttributes } from '@vectojs/core';
 
 export class Slider extends UIComponent {
   public min: number;

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ThreeAdapter } from '../src/ThreeAdapter';
-import { Entity, VectoUIEvent } from '@vecto-ui/core';
+import { Entity, VectoJSEvent } from '@vectojs/core';
 import * as THREE from 'three';
 
 // Mock WebGLRenderer & CanvasTexture to run in JSDOM headless environment
@@ -196,7 +196,7 @@ describe('ThreeAdapter', () => {
     shape.height = 100;
     adapter.vectoScene.add(shape);
 
-    let bubbleEvent: VectoUIEvent | null = null;
+    let bubbleEvent: VectoJSEvent | null = null;
     shape.on('pointerdown', (e: any) => {
       bubbleEvent = e;
     });

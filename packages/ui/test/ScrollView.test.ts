@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { Entity } from '@vecto-ui/core';
+import { Entity } from '@vectojs/core';
 import { ScrollView } from '../src/index';
 
 /** A fixed-size leaf so the ScrollView has measurable content. */

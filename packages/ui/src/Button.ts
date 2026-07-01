@@ -1,4 +1,4 @@
-import { A11yAttributes, IRenderer } from '@vecto-ui/core';
+import { A11yAttributes, IRenderer } from '@vectojs/core';
 import { UIComponent } from './UIComponent';
 import { measureText, fontSizePx } from './measure';
 

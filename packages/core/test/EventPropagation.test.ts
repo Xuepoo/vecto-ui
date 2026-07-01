@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Entity, VectoUIEvent } from '../src/index';
+import { Entity, VectoJSEvent } from '../src/index';
 
 class Node extends Entity {
   isPointInside(): boolean {
@@ -26,7 +26,7 @@ describe('Entity event propagation', () => {
     mid.on('click', () => order.push('mid'));
     parent.on('click', () => order.push('parent'));
 
-    leaf.dispatchEvent(new VectoUIEvent('click', leaf));
+    leaf.dispatchEvent(new VectoJSEvent('click', leaf));
 
     expect(order).toEqual(['leaf', 'mid', 'parent']);
   });
@@ -39,7 +39,7 @@ describe('Entity event propagation', () => {
     leaf.on('click', () => order.push('bub-leaf'));
     parent.on('click', () => order.push('bub-parent'));
 
-    leaf.dispatchEvent(new VectoUIEvent('click', leaf));
+    leaf.dispatchEvent(new VectoJSEvent('click', leaf));
 
     expect(order).toEqual(['cap-parent', 'cap-mid', 'bub-leaf', 'bub-parent']);
   });
@@ -47,13 +47,13 @@ describe('Entity event propagation', () => {
   it('stopPropagation halts the walk before ancestors run', () => {
     const { mid, leaf } = chain();
     const order: string[] = [];
-    leaf.on('click', (e: VectoUIEvent) => {
+    leaf.on('click', (e: VectoJSEvent) => {
       order.push('leaf');
       e.stopPropagation();
     });
     mid.on('click', () => order.push('mid'));
 
-    leaf.dispatchEvent(new VectoUIEvent('click', leaf));
+    leaf.dispatchEvent(new VectoJSEvent('click', leaf));
 
     expect(order).toEqual(['leaf']);
   });
@@ -61,14 +61,14 @@ describe('Entity event propagation', () => {
   it('stopImmediatePropagation also skips later listeners on the same node', () => {
     const { mid, leaf } = chain();
     const order: string[] = [];
-    leaf.on('click', (e: VectoUIEvent) => {
+    leaf.on('click', (e: VectoJSEvent) => {
       order.push('leaf-1');
       e.stopImmediatePropagation();
     });
     leaf.on('click', () => order.push('leaf-2'));
     mid.on('click', () => order.push('mid'));
 
-    leaf.dispatchEvent(new VectoUIEvent('click', leaf));
+    leaf.dispatchEvent(new VectoJSEvent('click', leaf));
 
     expect(order).toEqual(['leaf-1']);
   });
@@ -76,11 +76,11 @@ describe('Entity event propagation', () => {
   it('exposes target and the moving currentTarget', () => {
     const { parent, leaf } = chain();
     let seen: { t: string; c: string } | undefined;
-    parent.on('click', (e: VectoUIEvent) => {
+    parent.on('click', (e: VectoJSEvent) => {
       seen = { t: e.target.id, c: e.currentTarget.id };
     });
 
-    leaf.dispatchEvent(new VectoUIEvent('click', leaf));
+    leaf.dispatchEvent(new VectoJSEvent('click', leaf));
 
     expect(seen).toEqual({ t: 'leaf', c: 'parent' });
   });
@@ -91,7 +91,7 @@ describe('Entity event propagation', () => {
     leaf.on('pointerleave', () => order.push('leaf'));
     mid.on('pointerleave', () => order.push('mid'));
 
-    leaf.dispatchEvent(new VectoUIEvent('pointerleave', leaf, undefined, false));
+    leaf.dispatchEvent(new VectoJSEvent('pointerleave', leaf, undefined, false));
 
     expect(order).toEqual(['leaf']);
   });
@@ -105,12 +105,12 @@ describe('Entity event propagation', () => {
       defaultPrevented: false,
     };
     let dy: number | undefined;
-    leaf.on('wheel', (e: VectoUIEvent) => {
+    leaf.on('wheel', (e: VectoJSEvent) => {
       dy = e.deltaY;
       e.preventDefault();
     });
 
-    leaf.dispatchEvent(new VectoUIEvent('wheel', leaf, native));
+    leaf.dispatchEvent(new VectoJSEvent('wheel', leaf, native));
 
     expect(dy).toBe(42);
     expect(prevented).toBe(true);

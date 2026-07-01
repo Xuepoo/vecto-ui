@@ -1,4 +1,4 @@
-import { ArabicShaper } from '@vecto-ui/core';
+import { ArabicShaper } from '@vectojs/core';
 
 /**
  * Shared text measurement utilities backed by a single lazily-created offscreen

@@ -20,7 +20,7 @@ export interface IWebGPUParticleSystemManager {
   destroy(): void;
 }
 
-import { Entity, VectoUIEvent } from './Entity';
+import { Entity, VectoJSEvent } from './Entity';
 import { CanvasRenderer } from '../renderer/CanvasRenderer';
 import { SVGRenderer } from '../renderer/SVGRenderer';
 import { IRenderer } from '../renderer/IRenderer';
@@ -78,7 +78,7 @@ export interface SceneOptions {
    */
   a11ySyncInterval?: number;
   /**
-   * Custom renderer implementation (e.g., ThreeRenderer from @vecto-ui/three).
+   * Custom renderer implementation (e.g., ThreeRenderer from @vectojs/three).
    * If provided, this renderer will be used for drawing rather than the default CanvasRenderer.
    */
   renderer?: IRenderer;
@@ -489,7 +489,7 @@ export class Scene {
 
     if ((this.width === 0 || this.height === 0) && !this.hasWarnedZeroSize) {
       console.warn(
-        `[VectoUI] Scene started with width or height set to 0 (width: ${this.width}, height: ${this.height}). ` +
+        `[VectoJS] Scene started with width or height set to 0 (width: ${this.width}, height: ${this.height}). ` +
           'Entities may not render or simulate correctly. Please call scene.resize(width, height) to set valid dimensions.',
       );
       this.hasWarnedZeroSize = true;
@@ -609,44 +609,44 @@ export class Scene {
 
         // Bind pointer click
         el.addEventListener('click', (e) => {
-          node.dispatchEvent(new VectoUIEvent('click', node, e));
+          node.dispatchEvent(new VectoJSEvent('click', node, e));
         });
 
         // Developer debugger mode hover feedback
         el.addEventListener('mouseenter', (e) => {
           if (this.debugA11y) el!.style.backgroundColor = 'rgba(56, 189, 248, 0.2)';
-          node.dispatchEvent(new VectoUIEvent('hover', node, e, false));
+          node.dispatchEvent(new VectoJSEvent('hover', node, e, false));
         });
         el.addEventListener('mouseleave', (e) => {
           if (this.debugA11y) el!.style.backgroundColor = 'rgba(56, 189, 248, 0.05)';
-          node.dispatchEvent(new VectoUIEvent('pointerleave', node, e, false));
+          node.dispatchEvent(new VectoJSEvent('pointerleave', node, e, false));
         });
 
         const capEl = el;
         el.addEventListener('pointerdown', (e) => {
           if (typeof capEl.setPointerCapture === 'function') capEl.setPointerCapture(e.pointerId);
-          node.dispatchEvent(new VectoUIEvent('pointerdown', node, e));
+          node.dispatchEvent(new VectoJSEvent('pointerdown', node, e));
         });
         el.addEventListener('pointerup', (e) => {
           if (typeof capEl.releasePointerCapture === 'function')
             capEl.releasePointerCapture(e.pointerId);
-          node.dispatchEvent(new VectoUIEvent('pointerup', node, e));
+          node.dispatchEvent(new VectoJSEvent('pointerup', node, e));
         });
         el.addEventListener('pointermove', (e) =>
-          node.dispatchEvent(new VectoUIEvent('pointermove', node, e)),
+          node.dispatchEvent(new VectoJSEvent('pointermove', node, e)),
         );
         el.addEventListener(
           'wheel',
           (e) => {
-            node.dispatchEvent(new VectoUIEvent('wheel', node, e));
+            node.dispatchEvent(new VectoJSEvent('wheel', node, e));
           },
           { passive: false },
         );
         el.addEventListener('keydown', (e) => {
-          node.dispatchEvent(new VectoUIEvent('keydown', node, e));
+          node.dispatchEvent(new VectoJSEvent('keydown', node, e));
         });
         el.addEventListener('keyup', (e) => {
-          node.dispatchEvent(new VectoUIEvent('keyup', node, e));
+          node.dispatchEvent(new VectoJSEvent('keyup', node, e));
         });
 
         // Form integration listeners
@@ -737,7 +737,7 @@ export class Scene {
           el.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              node.dispatchEvent(new VectoUIEvent('click', node, e));
+              node.dispatchEvent(new VectoJSEvent('click', node, e));
             }
           });
         }

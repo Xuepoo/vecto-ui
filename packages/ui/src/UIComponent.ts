@@ -1,4 +1,4 @@
-import { Entity, Bounds } from '@vecto-ui/core';
+import { Entity, Bounds } from '@vectojs/core';
 
 /**
  * Base class for high-level UI components.

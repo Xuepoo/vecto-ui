@@ -1,5 +1,5 @@
 {
-  "name": "vecto-workspace",
+  "name": "vectojs-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,8 +7,8 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter '@vecto-ui/*' build",
-    "test": "bun run --filter '@vecto-ui/*' test",
+    "build": "bun run --filter '@vectojs/*' build",
+    "test": "bun run --filter '@vectojs/*' test",
     "format": "prettier --write \"**/*.{js,ts,json,md,html,yaml}\"",
     "lint": "oxlint --deny-warnings",
     "knip": "knip",

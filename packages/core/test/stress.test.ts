@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
-import { Scene, Entity, VectoUIEvent, type A11yAttributes } from '../src';
+import { Scene, Entity, VectoJSEvent, type A11yAttributes } from '../src';
 
 /**
  * Stress / load suite: drive the engine at the scale and churn its docs claim it
@@ -122,7 +122,7 @@ describe('stress / load', () => {
     top.on('click', () => captured++, { capture: true });
     top.on('click', () => bubbled++);
 
-    expect(() => leaf.dispatchEvent(new VectoUIEvent('click', leaf))).not.toThrow();
+    expect(() => leaf.dispatchEvent(new VectoJSEvent('click', leaf))).not.toThrow();
     expect(captured).toBe(1);
     expect(bubbled).toBe(1);
   });
